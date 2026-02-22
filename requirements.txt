@@ -1,0 +1,8 @@
+#### 2. requirements.txt
+
+```text
+numpy>=1.24
+matplotlib>=3.7
+scipy>=1.10               # optional, but useful for stats
+typer[all]>=0.12          # modern CLI (alternative: argparse / click)
+rich>=13.7                # beautiful terminal output (optional but recommended)
