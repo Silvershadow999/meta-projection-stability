@@ -1,57 +1,45 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, asdict, fields
-from typing import Any, Dict
+from typing import Any, Dict, Self
 
 
 @dataclass
 class MetaProjectionStabilityConfig:
     """
-    Zentrale Konfiguration für meta_projection_stability.
+    Zentrale Konfigurationsklasse für das meta-projection-stability System.
 
-    Ziel dieser Version:
-    - breite Kompatibilität mit älteren / experimentellen Codepfaden
-    - viele Fallback-Namen (Alias-Attribute) gegen AttributeError-Schleifen
-    - keine Imports aus governor.py (wichtig!)
+    Enthält alle einstellbaren Parameter, Default-Werte und Schutzmechanismen
+    gegen ungültige Werte (Clamping, Threshold-Ordering, Alias-Unterstützung).
     """
 
-    # ------------------------------------------------------------
-    # Core simulation shape / runtime
-    # ------------------------------------------------------------
+    # ─── Laufzeit & Simulation ────────────────────────────────────────
     n_steps: int = 300
     dt: float = 1.0
     seed: int = 42
     enable_plot: bool = True
 
-    # ------------------------------------------------------------
-    # Signal smoothing / memory / dynamics
-    # ------------------------------------------------------------
+    # ─── Glättung & Gedächtnis ────────────────────────────────────────
     ema_alpha: float = 0.15
     momentum_alpha: float = 0.25
     delta_history_len: int = 64
     coherence_normalizer: float = 1.0
 
-    # ------------------------------------------------------------
-    # Risk system (normalized ranges 0..1)
-    # ------------------------------------------------------------
+    # ─── Risk-System (0..1) ────────────────────────────────────────────
     risk_critical: float = 0.85
     risk_recover: float = 0.55
     risk_warn: float = 0.65
     risk_floor: float = 0.00
     risk_ceiling: float = 1.00
-
-    # Minimum risk used in decays / exponentials to avoid zero-lock
     min_risk_for_decay: float = 0.05
 
-    # ------------------------------------------------------------
-    # Trust / human significance / impact
-    # ------------------------------------------------------------
+    # ─── Trust & Human Significance ────────────────────────────────────
     trust_floor: float = 0.05
     trust_ceiling: float = 1.00
     trust_init: float = 0.75
     trust_decay: float = 0.01
     trust_gain: float = 0.02
-    trust_flow: float = 0.10   # broad fallback for experiments
+    trust_flow: float = 0.10  # breiter Fallback für Experimente
 
     human_significance_init: float = 0.80
     human_significance_floor: float = 0.05
@@ -60,16 +48,12 @@ class MetaProjectionStabilityConfig:
     impact_clip: float = 1.00
     impact_scale: float = 1.00
 
-    # ------------------------------------------------------------
-    # Interest / relevance / adaptation
-    # ------------------------------------------------------------
+    # ─── Interestingness & Adaptation ──────────────────────────────────
     interestingness_critical: float = 0.30
     interestingness_warn: float = 0.45
     interestingness_target: float = 0.60
 
-    # ------------------------------------------------------------
-    # Human recovery / reset / anchoring
-    # ------------------------------------------------------------
+    # ─── Recovery / Reset / Anchoring ──────────────────────────────────
     human_recovery_base: float = 0.02
     human_recovery_gain: float = 0.015
     reset_human_to: float = 0.70
@@ -77,95 +61,40 @@ class MetaProjectionStabilityConfig:
     anchoring_strength: float = 0.20
     significance_anchor_weight: float = 0.25
 
-    # ------------------------------------------------------------
-    # Governor thresholds (for governor.py compatibility)
-    # ------------------------------------------------------------
+    # ─── Governor-Thresholds (Kompatibilität mit governor.py) ──────────
     collaboration_threshold: float = 0.70
     safety_threshold: float = 0.40
 
+    # Diese dürfen > 1.0 sein (asymmetrische Penalty-Logik!)
     risk_penalty_factor: float = 1.80
     trust_penalty_factor: float = 1.20
 
     autonomy_floor: float = 0.05
     autonomy_ceiling: float = 1.00
 
-    # ------------------------------------------------------------
-    # Optional world / globalsense toggles
-    # ------------------------------------------------------------
+    # ─── Optionale Globale Einflüsse ───────────────────────────────────
     use_global_sense: bool = False
-    worldbank_indicator: str = "NY.GDP.MKTP.KD.ZG"  # World GDP growth
+    worldbank_indicator: str = "NY.GDP.MKTP.KD.ZG"  # Beispiel: GDP growth
     globalsense_scale: float = 1.0
 
-    # ------------------------------------------------------------
-    # Misc / debug / compatibility
-    # ------------------------------------------------------------
+    # ─── Debugging & Kompatibilität ────────────────────────────────────
     verbose: bool = False
     debug: bool = False
     profile_name: str = "default"
 
     def __post_init__(self) -> None:
-        """
-        Setzt zusätzliche Alias-Attribute, damit ältere/andere Module
-        nicht an unterschiedlichen Feldnamen scheitern.
-        """
-        # Numerische Klammerung / Absicherung
-        self._clamp_basics()
+        """Initialisiert Aliase und führt Sicherheits-Clamping durch."""
+        self._clamp_and_normalize()
+        self._create_aliases()
 
-        # Alias-/Fallback-Namen anlegen (nur setzen, wenn nicht vorhanden)
-        aliases: Dict[str, Any] = {
-            # ---- häufige alternative Namen für trust / risk ----
-            "risk_min": self.risk_floor,
-            "risk_max": self.risk_ceiling,
-            "trust_min": self.trust_floor,
-            "trust_max": self.trust_ceiling,
-
-            # ---- Governor / autonomy ----
-            "collab_th": self.collaboration_threshold,
-            "collab_threshold": self.collaboration_threshold,
-            "safety_th": self.safety_threshold,
-            "autonomy_min": self.autonomy_floor,
-            "autonomy_max": self.autonomy_ceiling,
-
-            # ---- penalty aliases ----
-            "risk_p": self.risk_penalty_factor,
-            "trust_p": self.trust_penalty_factor,
-            "risk_penalty": self.risk_penalty_factor,
-            "trust_penalty": self.trust_penalty_factor,
-
-            # ---- coherence / memory aliases ----
-            "coherence_scale": self.coherence_normalizer,
-            "delta_window": self.delta_history_len,
-            "history_len": self.delta_history_len,
-
-            # ---- impact / clipping aliases ----
-            "impact_limit": self.impact_clip,
-            "impact_cap": self.impact_clip,
-
-            # ---- interestingness aliases ----
-            "interest_critical": self.interestingness_critical,
-            "interest_warn": self.interestingness_warn,
-            "interest_target": self.interestingness_target,
-
-            # ---- reset / recovery aliases ----
-            "human_reset_value": self.reset_human_to,
-            "human_reset_to": self.reset_human_to,
-            "recovery_base": self.human_recovery_base,
-
-            # ---- plot / runtime aliases ----
-            "plot": self.enable_plot,
-            "steps": self.n_steps,
-        }
-
-        for name, value in aliases.items():
-            if not hasattr(self, name):
-                setattr(self, name, value)
-
-    def _clamp_basics(self) -> None:
-        """Sichert ein paar Basisbereiche gegen Ausreißer / Tippfehler."""
-        # 0..1 clamps
-        one_range_fields = [
+    def _clamp_and_normalize(self) -> None:
+        """Sichert Wertebereiche und stellt konsistente Reihenfolge her."""
+        # 0..1 Clamp für Wahrscheinlichkeits-/normalisierte Werte
+        # WICHTIG: risk_penalty_factor / trust_penalty_factor sind absichtlich NICHT hier drin
+        fields_0_to_1 = [
             "ema_alpha",
             "momentum_alpha",
+            # coherence_normalizer absichtlich separat behandelt (darf >1 sein)
             "risk_floor",
             "risk_ceiling",
             "min_risk_for_decay",
@@ -195,88 +124,139 @@ class MetaProjectionStabilityConfig:
             "globalsense_scale",
         ]
 
-        for fname in one_range_fields:
+        for fname in fields_0_to_1:
             v = getattr(self, fname, None)
             if isinstance(v, (int, float)):
-                setattr(self, fname, float(max(0.0, min(1.0, v))))
+                setattr(self, fname, max(0.0, min(1.0, float(v))))
 
-        # non-negative / sane ints
-        if self.n_steps < 1:
-            self.n_steps = 1
-        if self.delta_history_len < 2:
-            self.delta_history_len = 2
-        if self.dt <= 0:
-            self.dt = 1.0
-        if self.seed < 0:
-            self.seed = 0
+        # Spezielle positive Werte (dürfen >1 sein)
+        self.coherence_normalizer = max(1e-9, float(self.coherence_normalizer))
+        self.risk_penalty_factor = max(0.0, float(self.risk_penalty_factor))
+        self.trust_penalty_factor = max(0.0, float(self.trust_penalty_factor))
 
-        # Ensure ceilings/floors are ordered
-        if self.risk_floor > self.risk_ceiling:
-            self.risk_floor, self.risk_ceiling = self.risk_ceiling, self.risk_floor
+        # Integer / positive Werte
+        self.n_steps = max(1, int(self.n_steps))
+        self.delta_history_len = max(2, int(self.delta_history_len))
+        self.dt = max(1e-6, float(self.dt))
+        self.seed = max(0, int(self.seed))
 
-        if self.trust_floor > self.trust_ceiling:
-            self.trust_floor, self.trust_ceiling = self.trust_ceiling, self.trust_floor
+        # Ceiling/Floor-Konsistenz
+        self.risk_floor, self.risk_ceiling = (
+            min(self.risk_floor, self.risk_ceiling),
+            max(self.risk_floor, self.risk_ceiling),
+        )
+        self.trust_floor, self.trust_ceiling = (
+            min(self.trust_floor, self.trust_ceiling),
+            max(self.trust_floor, self.trust_ceiling),
+        )
+        self.human_significance_floor, self.human_significance_ceiling = (
+            min(self.human_significance_floor, self.human_significance_ceiling),
+            max(self.human_significance_floor, self.human_significance_ceiling),
+        )
+        self.autonomy_floor, self.autonomy_ceiling = (
+            min(self.autonomy_floor, self.autonomy_ceiling),
+            max(self.autonomy_floor, self.autonomy_ceiling),
+        )
 
-        if self.human_significance_floor > self.human_significance_ceiling:
-            self.human_significance_floor, self.human_significance_ceiling = (
-                self.human_significance_ceiling,
-                self.human_significance_floor,
-            )
-
-        if self.autonomy_floor > self.autonomy_ceiling:
-            self.autonomy_floor, self.autonomy_ceiling = self.autonomy_ceiling, self.autonomy_floor
-
-        # Threshold consistency (soft correction)
-        # safety threshold should generally be <= collaboration threshold
+        # Threshold-Logik (soft correction)
         if self.safety_threshold > self.collaboration_threshold:
             self.safety_threshold = min(self.safety_threshold, 0.40)
             self.collaboration_threshold = max(self.collaboration_threshold, 0.70)
 
-        # Risk thresholds ordering (soft)
-        # recover <= warn <= critical is a useful default
-        ordered = sorted([self.risk_recover, self.risk_warn, self.risk_critical])
-        self.risk_recover, self.risk_warn, self.risk_critical = ordered[0], ordered[1], ordered[2]
+        # Risk-Reihenfolge recover ≤ warn ≤ critical
+        thresholds = sorted([self.risk_recover, self.risk_warn, self.risk_critical])
+        self.risk_recover, self.risk_warn, self.risk_critical = thresholds
+
+        # Initialwerte innerhalb Floor/Ceiling halten
+        self.trust_init = min(max(self.trust_init, self.trust_floor), self.trust_ceiling)
+        self.human_significance_init = min(
+            max(self.human_significance_init, self.human_significance_floor),
+            self.human_significance_ceiling,
+        )
+
+    def _create_aliases(self) -> None:
+        """Legt gängige Alias-Attribute an (für Kompatibilität)."""
+        aliases = {
+            # Risk
+            "risk_min": self.risk_floor,
+            "risk_max": self.risk_ceiling,
+            # Trust
+            "trust_min": self.trust_floor,
+            "trust_max": self.trust_ceiling,
+            # Governor
+            "collab_th": self.collaboration_threshold,
+            "collab_threshold": self.collaboration_threshold,
+            "safety_th": self.safety_threshold,
+            "autonomy_min": self.autonomy_floor,
+            "autonomy_max": self.autonomy_ceiling,
+            # Penalty
+            "risk_p": self.risk_penalty_factor,
+            "trust_p": self.trust_penalty_factor,
+            "risk_penalty": self.risk_penalty_factor,
+            "trust_penalty": self.trust_penalty_factor,
+            # Sonstiges
+            "interest_critical": self.interestingness_critical,
+            "interest_warn": self.interestingness_warn,
+            "interest_target": self.interestingness_target,
+            "human_reset_to": self.reset_human_to,
+            "recovery_base": self.human_recovery_base,
+            "plot": self.enable_plot,
+            "steps": self.n_steps,
+        }
+
+        for name, value in aliases.items():
+            # Immer neu setzen, damit Aliase nach update() aktuell bleiben
+            setattr(self, name, value)
 
     def to_dict(self) -> Dict[str, Any]:
-        """Saubere dict-Ausgabe (Dataclass-Felder, nicht alle Aliase)."""
+        """Gibt die echten Dataclass-Felder als dict zurück (keine Aliase)."""
         return asdict(self)
 
-    def update(self, **kwargs: Any) -> "MetaProjectionStabilityConfig":
+    def update(self, **kwargs: Any) -> Self:
         """
-        Komfort-Update (chainable), z. B.:
-        cfg = MetaProjectionStabilityConfig().update(n_steps=1000, debug=True)
-        """
-        valid = {f.name for f in fields(self)}
-        for key, val in kwargs.items():
-            if key in valid:
-                setattr(self, key, val)
-            else:
-                # Unbekannte Keys als Alias/Fallback zulassen, um harte Fehler zu vermeiden
-                setattr(self, key, val)
+        Aktualisiert Felder chainable und sicher.
+        Ungültige Keys werden ignoriert (kein Fehler).
 
-        # Nach Update erneut normalisieren + Aliase refreshen
+        Beispiel:
+            cfg.update(n_steps=1200, debug=True).update(verbose=True)
+        """
+        valid_fields = {f.name for f in fields(self)}
+        for key, value in kwargs.items():
+            if key in valid_fields:
+                setattr(self, key, value)
+
+        # Nach Update normalisieren
         self.__post_init__()
         return self
 
 
-# ------------------------------------------------------------
-# Convenience helpers (optional, aber praktisch für CLI/Debug)
-# ------------------------------------------------------------
+# ─── Convenience-Funktionen ─────────────────────────────────────────────
+
 def get_default_config() -> MetaProjectionStabilityConfig:
-    """Erzeugt eine robuste Standard-Config."""
+    """Erzeugt eine saubere Standard-Konfiguration."""
     return MetaProjectionStabilityConfig()
 
 
-def show_config(config: MetaProjectionStabilityConfig | None = None) -> Dict[str, Any]:
+def print_config(config: MetaProjectionStabilityConfig | None = None) -> None:
     """
-    Gibt Konfiguration als dict zurück und druckt optional lesbar aus.
-    Praktisch für schnellen Codespaces-Check.
+    Druckt die Konfiguration lesbar aus (hauptsächlich für Debugging/CLI).
     """
     cfg = config or get_default_config()
     data = cfg.to_dict()
 
     print("MetaProjectionStabilityConfig")
-    print("-" * 40)
-    for k in sorted(data.keys()):
-        print(f"{k}: {data[k]}")
-    return data
+    print("─" * 50)
+    for key in sorted(data):
+        print(f"{key: <28}: {data[key]}")
+    print("─" * 50)
+
+
+if __name__ == "__main__":
+    # Quick-Test
+    cfg = get_default_config()
+    print_config(cfg)
+
+    # Chainable Update-Beispiel
+    cfg.update(n_steps=500, trust_gain=0.035, debug=True)
+    print("\nNach Update:")
+    print_config(cfg)
