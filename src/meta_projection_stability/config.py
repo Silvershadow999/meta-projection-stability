@@ -6,7 +6,7 @@ Enthält alle einstellbaren Parameter, Defaults und Schutzmechanismen.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field, fields
 from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
@@ -90,6 +90,9 @@ class MetaProjectionStabilityConfig:
     debug: bool = False
     profile_name: str = "default"
 
+    # Optionales Metadaten-Feld (nicht zwingend genutzt, aber praktisch)
+    tags: List[str] = field(default_factory=list)
+
     def __post_init__(self) -> None:
         """Initialisiert Aliase und führt Sicherheits-Clamping durch."""
         self._clamp_and_normalize()
@@ -117,12 +120,16 @@ class MetaProjectionStabilityConfig:
             "interestingness_critical",
             "interestingness_warn",
             "interestingness_target",
+            "human_recovery_base",
+            "human_recovery_gain",
+            "reset_human_to",
             "anchoring_strength",
             "significance_anchor_weight",
             "collaboration_threshold",
             "safety_threshold",
             "autonomy_floor",
             "autonomy_ceiling",
+            "globalsense_scale",
         ]
 
         for fname in fields_0_to_1:
@@ -143,19 +150,34 @@ class MetaProjectionStabilityConfig:
 
         # Ceiling/Floor-Konsistenz
         for pair in ["risk", "trust", "human_significance", "autonomy"]:
-            floor = getattr(self, f"{pair}_floor", 0.0)
-            ceiling = getattr(self, f"{pair}_ceiling", 1.0)
-            setattr(self, f"{pair}_floor", min(floor, ceiling))
-            setattr(self, f"{pair}_ceiling", max(floor, ceiling))
+            floor_v = float(getattr(self, f"{pair}_floor", 0.0))
+            ceiling_v = float(getattr(self, f"{pair}_ceiling", 1.0))
+            low = min(floor_v, ceiling_v)
+            high = max(floor_v, ceiling_v)
+            setattr(self, f"{pair}_floor", low)
+            setattr(self, f"{pair}_ceiling", high)
 
-        # Threshold-Logik (soft correction)
+        # Threshold-Logik (defensive ordering)
         if self.safety_threshold > self.collaboration_threshold:
-            self.safety_threshold = min(self.safety_threshold, 0.40)
-            self.collaboration_threshold = max(self.collaboration_threshold, 0.70)
+            self.safety_threshold, self.collaboration_threshold = (
+                self.collaboration_threshold,
+                self.safety_threshold,
+            )
 
         # Risk-Reihenfolge recover ≤ warn ≤ critical
-        thresholds = sorted([self.risk_recover, self.risk_warn, self.risk_critical])
+        thresholds = sorted(
+            [
+                float(self.risk_recover),
+                float(self.risk_warn),
+                float(self.risk_critical),
+            ]
+        )
         self.risk_recover, self.risk_warn, self.risk_critical = thresholds
+
+        # Risk-Thresholds zusätzlich in [risk_floor, risk_ceiling] einhegen
+        self.risk_recover = min(max(self.risk_recover, self.risk_floor), self.risk_ceiling)
+        self.risk_warn = min(max(self.risk_warn, self.risk_floor), self.risk_ceiling)
+        self.risk_critical = min(max(self.risk_critical, self.risk_floor), self.risk_ceiling)
 
         # Initialwerte innerhalb Floor/Ceiling halten
         self.trust_init = min(max(self.trust_init, self.trust_floor), self.trust_ceiling)
@@ -201,7 +223,7 @@ class MetaProjectionStabilityConfig:
         """Gibt die echten Dataclass-Felder als dict zurück (keine Aliase)."""
         return asdict(self)
 
-    def update(self, **kwargs: Any) -> 'MetaProjectionStabilityConfig':
+    def update(self, **kwargs: Any) -> "MetaProjectionStabilityConfig":
         """
         Aktualisiert Felder chainable und sicher.
         Ungültige Keys werden ignoriert (kein Fehler).
@@ -211,7 +233,7 @@ class MetaProjectionStabilityConfig:
             if key in valid_fields:
                 setattr(self, key, value)
 
-        # Nach Update normalisieren
+        # Nach Update normalisieren + Aliase neu erzeugen
         self.__post_init__()
         return self
 
@@ -233,7 +255,7 @@ def print_config(config: MetaProjectionStabilityConfig | None = None) -> None:
     print("MetaProjectionStabilityConfig")
     print("─" * 50)
     for key in sorted(data):
-        print(f"{key: <28}: {data[key]}")
+        print(f"{key:<28}: {data[key]}")
     print("─" * 50)
 
 
