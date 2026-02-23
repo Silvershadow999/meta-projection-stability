@@ -35,4 +35,3 @@ __all__ = [
     "summarize_barometer_history",
     "map_barometer_to_governor_inputs",
 ]
-```0
