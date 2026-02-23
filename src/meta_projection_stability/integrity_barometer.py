@@ -1,370 +1,225 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Dict, Any, Optional
+from dataclasses import dataclass
+from typing import Optional, Literal
+
 import numpy as np
+
+
+BarometerStatus = Literal["GREEN", "YELLOW", "RED"]
 
 
 def _clip01(x: float) -> float:
     return float(np.clip(float(x), 0.0, 1.0))
 
 
-def _safe_float(x: Any, default: float) -> float:
-    try:
-        return float(x)
-    except (TypeError, ValueError):
-        return float(default)
-
-
 @dataclass
 class IntegrityBarometerConfig:
     """
-    Konfiguration für den Integritäts-/Manipulations-Barometer.
+    Konfiguration für das Integritäts-/Risikobarometer.
 
     Ziel:
-    - Aus mehreren Faktoren einen stabilen Integritätsscore (0..1) ableiten
-    - Daraus ein Manipulationsrisiko (0..1) berechnen
-    - Einfache Ampel-Klassifikation (GREEN/YELLOW/RED)
-    - Optional geglättetes Risiko (EMA), damit nicht jeder Spike sofort eskaliert
+    - stabile, geglättete Anzeige (EMA)
+    - robuste Aggregation aus Kohärenz, Trust, Root-Stability, Somatic Anchor
+    - klare Status-Ampel (GREEN / YELLOW / RED)
     """
-
-    # Schwellen für die Ampel auf Basis des RISIKOS
-    green_risk_threshold: float = 0.20   # risk <= 0.20 => GREEN
-    yellow_risk_threshold: float = 0.50  # risk <= 0.50 => YELLOW, sonst RED
-
-    # Integritäts-Baseline: Werte unterhalb der Baseline erhöhen Risiko stärker
-    integrity_floor: float = 0.10
-
-    # EMA-Glättung für Risiko
-    ema_alpha_risk: float = 0.20
-
-    # Grace-Period (optional) für aufrufende Systeme; hier nur mitgeführt
-    grace_period_s: float = 0.0
-
-    # Gewichtung der Integritätsfaktoren (werden normalisiert)
-    weight_root: float = 0.40
+    # Gewichte (werden intern normalisiert, falls Summe != 1)
+    weight_root: float = 0.20
     weight_somatic: float = 0.20
-    weight_coherence: float = 0.25
-    weight_trust: float = 0.15
+    weight_coherence: float = 0.40
+    weight_trust: float = 0.20
 
-    def __post_init__(self):
-        self._clamp()
+    # Glättung
+    ema_alpha_risk: float = 0.15
 
-    def _clamp(self) -> None:
-        self.green_risk_threshold = _clip01(self.green_risk_threshold)
-        self.yellow_risk_threshold = _clip01(self.yellow_risk_threshold)
+    # Schwellwerte
+    yellow_threshold: float = 0.40
+    red_threshold: float = 0.70
 
-        # defensive ordering: green <= yellow
-        if self.green_risk_threshold > self.yellow_risk_threshold:
-            self.green_risk_threshold, self.yellow_risk_threshold = (
-                self.yellow_risk_threshold,
-                self.green_risk_threshold,
-            )
+    # Sicherheitsgrenzen / Bias
+    risk_floor: float = 0.0
+    risk_ceiling: float = 1.0
 
-        self.integrity_floor = _clip01(self.integrity_floor)
+    # Optional: etwas Risiko-Abmilderung bei sehr hoher Kohärenz + Trust
+    synergy_bonus: float = 0.10
+
+    def __post_init__(self) -> None:
+        self.weight_root = max(0.0, float(self.weight_root))
+        self.weight_somatic = max(0.0, float(self.weight_somatic))
+        self.weight_coherence = max(0.0, float(self.weight_coherence))
+        self.weight_trust = max(0.0, float(self.weight_trust))
+
         self.ema_alpha_risk = _clip01(self.ema_alpha_risk)
-        self.grace_period_s = max(0.0, _safe_float(self.grace_period_s, 0.0))
+        self.yellow_threshold = _clip01(self.yellow_threshold)
+        self.red_threshold = _clip01(self.red_threshold)
 
-        # normalize positive weights (fallback to defaults if degenerate)
-        weights = np.array(
-            [
-                max(0.0, _safe_float(self.weight_root, 0.40)),
-                max(0.0, _safe_float(self.weight_somatic, 0.20)),
-                max(0.0, _safe_float(self.weight_coherence, 0.25)),
-                max(0.0, _safe_float(self.weight_trust, 0.15)),
-            ],
+        # defensive ordering
+        if self.yellow_threshold > self.red_threshold:
+            self.yellow_threshold, self.red_threshold = self.red_threshold, self.yellow_threshold
+
+        self.risk_floor = _clip01(self.risk_floor)
+        self.risk_ceiling = _clip01(self.risk_ceiling)
+        if self.risk_floor > self.risk_ceiling:
+            self.risk_floor, self.risk_ceiling = self.risk_ceiling, self.risk_floor
+
+        self.synergy_bonus = _clip01(self.synergy_bonus)
+
+    def normalized_weights(self) -> tuple[float, float, float, float]:
+        w = np.array(
+            [self.weight_root, self.weight_somatic, self.weight_coherence, self.weight_trust],
             dtype=float,
         )
-        s = float(np.sum(weights))
-        if s <= 0.0:
-            weights = np.array([0.40, 0.20, 0.25, 0.15], dtype=float)
-            s = float(np.sum(weights))
-
-        weights = weights / s
-        self.weight_root = float(weights[0])
-        self.weight_somatic = float(weights[1])
-        self.weight_coherence = float(weights[2])
-        self.weight_trust = float(weights[3])
+        s = float(w.sum())
+        if s <= 1e-12:
+            # Fallback auf sinnvolle Default-Verteilung
+            return (0.20, 0.20, 0.40, 0.20)
+        w /= s
+        return float(w[0]), float(w[1]), float(w[2]), float(w[3])
 
 
 @dataclass
 class IntegrityBarometerState:
     """
-    Zustand des Integritäts-Barometers für einen Simulationsschritt.
+    Zustand des Barometers.
     """
-    # Rohinputs (sichtbar für Debug/Plots)
-    root_stability: float = 0.0
-    somatic_anchor: float = 0.0
-    coherence_level: float = 0.0
-    trust: float = 0.0
+    manip_risk: float = 0.0
+    raw_risk: float = 0.0
+    integrity_score: float = 1.0
+    status: BarometerStatus = "GREEN"
+    step_count: int = 0
 
-    # Abgeleitete Größen
-    integrity_score: float = 0.0          # 0..1
-    manip_risk_raw: float = 0.0           # 0..1 (vor EMA)
-    manip_risk: float = 0.0               # 0..1 (nach EMA)
-    status: str = "IDLE"                  # GREEN / YELLOW / RED / IDLE
-    time_s: float = 0.0
-
-    # Sichtbare Schwellen / Metadaten (praktisch für Plot/Debug)
-    green_risk_threshold: float = 0.20
-    yellow_risk_threshold: float = 0.50
-    integrity_floor: float = 0.10
-    ema_alpha_risk: float = 0.20
-
-    notes: list[str] = field(default_factory=list)
+    # Input-echo (hilfreich fürs Debugging / Plotting)
+    root_stability: float = 1.0
+    somatic_anchor: float = 1.0
+    coherence_level: float = 1.0
+    trust: float = 1.0
 
 
-def classify_barometer_status(
-    manip_risk: float,
-    green_risk_threshold: float = 0.20,
-    yellow_risk_threshold: float = 0.50,
-) -> str:
-    """
-    Klassifiziert die Ampel anhand des Manipulationsrisikos.
-
-    - GREEN:  risk <= green_threshold
-    - YELLOW: risk <= yellow_threshold
-    - RED:    risk > yellow_threshold
-    """
-    r = _clip01(manip_risk)
-    g = _clip01(green_risk_threshold)
-    y = _clip01(yellow_risk_threshold)
-
-    if g > y:
-        g, y = y, g
-
-    if r <= g:
-        return "GREEN"
-    if r <= y:
+def _status_from_risk(risk: float, cfg: IntegrityBarometerConfig) -> BarometerStatus:
+    if risk >= cfg.red_threshold:
+        return "RED"
+    if risk >= cfg.yellow_threshold:
         return "YELLOW"
-    return "RED"
+    return "GREEN"
 
 
-def compute_integrity_score(
+def _compute_integrity_score(
     root_stability: float,
     somatic_anchor: float,
     coherence_level: float,
     trust: float,
-    config: Optional[IntegrityBarometerConfig] = None,
+    cfg: IntegrityBarometerConfig,
 ) -> float:
-    """
-    Berechnet einen gewichteten Integritätsscore (0..1).
+    wr, ws, wc, wt = cfg.normalized_weights()
 
-    Inputs:
-    - root_stability: Stabilität des Root-/Baseline-Layers
-    - somatic_anchor: somatische/operative Verankerung (oder Ersatzsignal)
-    - coherence_level: Kohärenz-/Signalqualität
-    - trust: externer oder interner Trust-Wert
+    root_stability = _clip01(root_stability)
+    somatic_anchor = _clip01(somatic_anchor)
+    coherence_level = _clip01(coherence_level)
+    trust = _clip01(trust)
 
-    Die Gewichte kommen aus IntegrityBarometerConfig und werden dort normalisiert.
-    """
-    cfg = config or IntegrityBarometerConfig()
-
-    r = _clip01(root_stability)
-    s = _clip01(somatic_anchor)
-    c = _clip01(coherence_level)
-    t = _clip01(trust)
-
-    score = (
-        cfg.weight_root * r
-        + cfg.weight_somatic * s
-        + cfg.weight_coherence * c
-        + cfg.weight_trust * t
+    # gewichtete Integrität
+    base = (
+        wr * root_stability
+        + ws * somatic_anchor
+        + wc * coherence_level
+        + wt * trust
     )
-    return _clip01(score)
 
+    # Synergiebonus bei gleichzeitig guter Kohärenz + Trust
+    synergy = cfg.synergy_bonus * max(0.0, min(coherence_level, trust) - 0.5) * 2.0
+    score = _clip01(base + max(0.0, synergy))
 
-def compute_manipulation_risk(
-    integrity_score: float,
-    integrity_floor: float = 0.10,
-) -> float:
-    """
-    Leitet ein Manipulationsrisiko (0..1) aus dem Integritätsscore ab.
-
-    Design:
-    - Risiko sinkt bei hoher Integrität
-    - integrity_floor wirkt als Baseline: unterhalb der Floor steigt Risiko stärker
-    """
-    score = _clip01(integrity_score)
-    floor = _clip01(integrity_floor)
-
-    # Baseline-adjusted integrity
-    baseline_adjusted = max(0.0, score - floor)
-    return _clip01(1.0 - baseline_adjusted)
+    return score
 
 
 def barometer_step(
+    *,
     root_stability: float,
     somatic_anchor: float,
     coherence_level: float,
     trust: float,
     prev_state: Optional[IntegrityBarometerState] = None,
     config: Optional[IntegrityBarometerConfig] = None,
-    dt: float = 0.0,
+    dt: float = 0.1,
 ) -> IntegrityBarometerState:
     """
-    Ein Simulationsschritt des Integritäts-Barometers.
+    Ein einzelner, stateless testbarer Integritäts-Barometer-Schritt.
 
-    Ablauf:
-    1) Integritätsscore berechnen
-    2) Roh-Risiko ableiten
-    3) Risiko via EMA glätten (mit prev_state)
-    4) Ampelstatus klassifizieren
+    Inputs:
+    - root_stability: stabiler Systemanker (0..1)
+    - somatic_anchor: externer/sensorischer Anchor (0..1)
+    - coherence_level: MPS-Kohärenz/Stabilitätswert (0..1)
+    - trust: Trust-Wert (0..1)
+    - prev_state: vorheriger Zustand (für EMA)
+    - config: Konfiguration
+    - dt: derzeit nicht zwingend genutzt, bleibt für API-Stabilität erhalten
     """
+    _ = dt  # API-kompatibel, aktuell nicht verwendet
     cfg = config or IntegrityBarometerConfig()
-    dt = max(0.0, _safe_float(dt, 0.0))
 
-    score = compute_integrity_score(
+    root_stability = _clip01(root_stability)
+    somatic_anchor = _clip01(somatic_anchor)
+    coherence_level = _clip01(coherence_level)
+    trust = _clip01(trust)
+
+    integrity_score = _compute_integrity_score(
         root_stability=root_stability,
         somatic_anchor=somatic_anchor,
         coherence_level=coherence_level,
         trust=trust,
-        config=cfg,
-    )
-    risk_raw = compute_manipulation_risk(
-        integrity_score=score,
-        integrity_floor=cfg.integrity_floor,
+        cfg=cfg,
     )
 
-    prev_risk = 0.0 if prev_state is None else _clip01(prev_state.manip_risk)
-    alpha = cfg.ema_alpha_risk
-    risk = _clip01(alpha * risk_raw + (1.0 - alpha) * prev_risk)
+    # Risiko = inverse Integrität
+    raw_risk = 1.0 - integrity_score
+    raw_risk = float(np.clip(raw_risk, cfg.risk_floor, cfg.risk_ceiling))
 
-    status = classify_barometer_status(
-        manip_risk=risk,
-        green_risk_threshold=cfg.green_risk_threshold,
-        yellow_risk_threshold=cfg.yellow_risk_threshold,
-    )
+    if prev_state is None:
+        smoothed_risk = raw_risk
+        step_count = 1
+    else:
+        alpha = cfg.ema_alpha_risk
+        smoothed_risk = alpha * raw_risk + (1.0 - alpha) * float(prev_state.manip_risk)
+        smoothed_risk = float(np.clip(smoothed_risk, cfg.risk_floor, cfg.risk_ceiling))
+        step_count = int(prev_state.step_count) + 1
 
-    time_s = dt if prev_state is None else float(prev_state.time_s + dt)
+    status = _status_from_risk(smoothed_risk, cfg)
 
-    state = IntegrityBarometerState(
-        root_stability=_clip01(root_stability),
-        somatic_anchor=_clip01(somatic_anchor),
-        coherence_level=_clip01(coherence_level),
-        trust=_clip01(trust),
-        integrity_score=score,
-        manip_risk_raw=risk_raw,
-        manip_risk=risk,
+    return IntegrityBarometerState(
+        manip_risk=smoothed_risk,
+        raw_risk=raw_risk,
+        integrity_score=integrity_score,
         status=status,
-        time_s=time_s,
-        green_risk_threshold=cfg.green_risk_threshold,
-        yellow_risk_threshold=cfg.yellow_risk_threshold,
-        integrity_floor=cfg.integrity_floor,
-        ema_alpha_risk=cfg.ema_alpha_risk,
+        step_count=step_count,
+        root_stability=root_stability,
+        somatic_anchor=somatic_anchor,
+        coherence_level=coherence_level,
+        trust=trust,
     )
 
-    # optional notes for debugging transitions
-    if prev_state is not None and prev_state.status != status:
-        state.notes.append(f"status_change: {prev_state.status} -> {status}")
 
-    return state
+if __name__ == "__main__":
+    cfg = IntegrityBarometerConfig(weight_coherence=0.60, ema_alpha_risk=0.15)
+    s = None
 
+    demo_inputs = [
+        (1.0, 0.9, 0.95, 0.9),
+        (1.0, 0.8, 0.70, 0.8),
+        (1.0, 0.7, 0.45, 0.7),
+        (1.0, 0.6, 0.25, 0.5),
+    ]
 
-def summarize_barometer_history(history: list[IntegrityBarometerState]) -> Dict[str, float | int]:
-    """
-    Kompakte Auswertung für CLI / Debugging:
-    - Anzahl Statuswechsel
-    - Anteil GREEN/YELLOW/RED
-    - erste RED-Stelle
-    - mittlere Integrität / mittleres Risiko
-    """
-    n = len(history)
-    if n == 0:
-        return {
-            "n_steps": 0,
-            "status_switches": 0,
-            "green_ratio": 0.0,
-            "yellow_ratio": 0.0,
-            "red_ratio": 0.0,
-            "first_red_idx": -1,
-            "mean_integrity_score": 0.0,
-            "mean_manip_risk": 0.0,
-        }
-
-    statuses = [h.status for h in history]
-    scores = [float(h.integrity_score) for h in history]
-    risks = [float(h.manip_risk) for h in history]
-
-    status_switches = 0
-    for i in range(1, n):
-        if statuses[i] != statuses[i - 1]:
-            status_switches += 1
-
-    green_count = sum(1 for s in statuses if s == "GREEN")
-    yellow_count = sum(1 for s in statuses if s == "YELLOW")
-    red_count = sum(1 for s in statuses if s == "RED")
-
-    first_red = next((i for i, s in enumerate(statuses) if s == "RED"), -1)
-
-    return {
-        "n_steps": n,
-        "status_switches": status_switches,
-        "green_ratio": green_count / n,
-        "yellow_ratio": yellow_count / n,
-        "red_ratio": red_count / n,
-        "first_red_idx": first_red,
-        "mean_integrity_score": float(np.mean(scores)) if scores else 0.0,
-        "mean_manip_risk": float(np.mean(risks)) if risks else 0.0,
-    }
-
-
-def map_barometer_to_governor_inputs(
-    state: IntegrityBarometerState,
-    trust_override: Optional[float] = None,
-) -> Dict[str, float]:
-    """
-    Kopplungsschritt Barometer -> Governor (neutral gehalten):
-
-    Governor erwartet typischerweise:
-    - trust (0..1)
-    - risk  (0..1)
-
-    Standard-Strategie:
-    - trust = Integrity-Score (oder override)
-    - risk  = manip_risk
-    """
-    trust = _clip01(state.integrity_score if trust_override is None else trust_override)
-    risk = _clip01(state.manip_risk)
-    return {"trust": trust, "risk": risk}
-
-
-def compute_barometer_history(
-    root_hist,
-    somatic_hist,
-    coherence_hist,
-    trust_hist,
-    config: Optional[IntegrityBarometerConfig] = None,
-    dt: float = 0.0,
-) -> list[IntegrityBarometerState]:
-    """
-    Hilfsfunktion für Zeitreihen:
-    Berechnet die Barometer-Historie aus vier gleich langen Input-Serien.
-    """
-    cfg = config or IntegrityBarometerConfig()
-
-    r = np.asarray(root_hist, dtype=float)
-    s = np.asarray(somatic_hist, dtype=float)
-    c = np.asarray(coherence_hist, dtype=float)
-    t = np.asarray(trust_hist, dtype=float)
-
-    if not (r.shape == s.shape == c.shape == t.shape):
-        raise ValueError("All histories must have the same shape")
-
-    out: list[IntegrityBarometerState] = []
-    prev: Optional[IntegrityBarometerState] = None
-
-    for rv, sv, cv, tv in zip(r, s, c, t):
-        step_state = barometer_step(
-            root_stability=float(rv),
-            somatic_anchor=float(sv),
-            coherence_level=float(cv),
-            trust=float(tv),
-            prev_state=prev,
+    for i, (r0, sa, coh, tr) in enumerate(demo_inputs, start=1):
+        s = barometer_step(
+            root_stability=r0,
+            somatic_anchor=sa,
+            coherence_level=coh,
+            trust=tr,
+            prev_state=s,
             config=cfg,
-            dt=dt,
+            dt=0.1,
         )
-        out.append(step_state)
-        prev = step_state
-
-    return out
+        print(
+            f"[{i}] integrity={s.integrity_score:.3f} raw_risk={s.raw_risk:.3f} "
+            f"risk={s.manip_risk:.3f} status={s.status}"
+        )
