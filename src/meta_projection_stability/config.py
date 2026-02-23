@@ -1,7 +1,15 @@
+"""
+MetaProjectionStabilityConfig – zentrale Konfiguration für das Projekt
+
+Enthält alle einstellbaren Parameter, Defaults und Schutzmechanismen.
+"""
+
 from __future__ import annotations
 
-from dataclasses import dataclass, asdict, fields
-from typing import Any, Dict, Self
+from dataclasses import dataclass, field
+from typing import Any, Dict, List, Optional, Tuple
+
+import numpy as np
 
 
 @dataclass
@@ -89,12 +97,9 @@ class MetaProjectionStabilityConfig:
 
     def _clamp_and_normalize(self) -> None:
         """Sichert Wertebereiche und stellt konsistente Reihenfolge her."""
-        # 0..1 Clamp für Wahrscheinlichkeits-/normalisierte Werte
-        # WICHTIG: risk_penalty_factor / trust_penalty_factor sind absichtlich NICHT hier drin
         fields_0_to_1 = [
             "ema_alpha",
             "momentum_alpha",
-            # coherence_normalizer absichtlich separat behandelt (darf >1 sein)
             "risk_floor",
             "risk_ceiling",
             "min_risk_for_decay",
@@ -112,16 +117,12 @@ class MetaProjectionStabilityConfig:
             "interestingness_critical",
             "interestingness_warn",
             "interestingness_target",
-            "human_recovery_base",
-            "human_recovery_gain",
-            "reset_human_to",
             "anchoring_strength",
             "significance_anchor_weight",
             "collaboration_threshold",
             "safety_threshold",
             "autonomy_floor",
             "autonomy_ceiling",
-            "globalsense_scale",
         ]
 
         for fname in fields_0_to_1:
@@ -130,33 +131,22 @@ class MetaProjectionStabilityConfig:
                 setattr(self, fname, max(0.0, min(1.0, float(v))))
 
         # Spezielle positive Werte (dürfen >1 sein)
-        self.coherence_normalizer = max(1e-9, float(self.coherence_normalizer))
-        self.risk_penalty_factor = max(0.0, float(self.risk_penalty_factor))
-        self.trust_penalty_factor = max(0.0, float(self.trust_penalty_factor))
+        self.coherence_normalizer = max(1e-9, float(self.coherence_normalizer or 1.0))
+        self.risk_penalty_factor = max(0.0, float(self.risk_penalty_factor or 1.0))
+        self.trust_penalty_factor = max(0.0, float(self.trust_penalty_factor or 1.0))
 
         # Integer / positive Werte
         self.n_steps = max(1, int(self.n_steps))
-        self.delta_history_len = max(2, int(self.delta_history_len))
+        self.delta_history_len = max(2, int(self.delta_history_len or 64))
         self.dt = max(1e-6, float(self.dt))
         self.seed = max(0, int(self.seed))
 
         # Ceiling/Floor-Konsistenz
-        self.risk_floor, self.risk_ceiling = (
-            min(self.risk_floor, self.risk_ceiling),
-            max(self.risk_floor, self.risk_ceiling),
-        )
-        self.trust_floor, self.trust_ceiling = (
-            min(self.trust_floor, self.trust_ceiling),
-            max(self.trust_floor, self.trust_ceiling),
-        )
-        self.human_significance_floor, self.human_significance_ceiling = (
-            min(self.human_significance_floor, self.human_significance_ceiling),
-            max(self.human_significance_floor, self.human_significance_ceiling),
-        )
-        self.autonomy_floor, self.autonomy_ceiling = (
-            min(self.autonomy_floor, self.autonomy_ceiling),
-            max(self.autonomy_floor, self.autonomy_ceiling),
-        )
+        for pair in ["risk", "trust", "human_significance", "autonomy"]:
+            floor = getattr(self, f"{pair}_floor", 0.0)
+            ceiling = getattr(self, f"{pair}_ceiling", 1.0)
+            setattr(self, f"{pair}_floor", min(floor, ceiling))
+            setattr(self, f"{pair}_ceiling", max(floor, ceiling))
 
         # Threshold-Logik (soft correction)
         if self.safety_threshold > self.collaboration_threshold:
@@ -205,20 +195,16 @@ class MetaProjectionStabilityConfig:
         }
 
         for name, value in aliases.items():
-            # Immer neu setzen, damit Aliase nach update() aktuell bleiben
             setattr(self, name, value)
 
     def to_dict(self) -> Dict[str, Any]:
         """Gibt die echten Dataclass-Felder als dict zurück (keine Aliase)."""
         return asdict(self)
 
-    def update(self, **kwargs: Any) -> Self:
+    def update(self, **kwargs: Any) -> 'MetaProjectionStabilityConfig':
         """
         Aktualisiert Felder chainable und sicher.
         Ungültige Keys werden ignoriert (kein Fehler).
-
-        Beispiel:
-            cfg.update(n_steps=1200, debug=True).update(verbose=True)
         """
         valid_fields = {f.name for f in fields(self)}
         for key, value in kwargs.items():
@@ -257,6 +243,6 @@ if __name__ == "__main__":
     print_config(cfg)
 
     # Chainable Update-Beispiel
-    cfg.update(n_steps=500, trust_gain=0.035, debug=True)
+    cfg.update(n_steps=500, debug=True)
     print("\nNach Update:")
     print_config(cfg)
