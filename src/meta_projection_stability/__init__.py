@@ -1,34 +1,16 @@
-from .config import MetaProjectionStabilityConfig
-from .adapter import MetaProjectionStabilityAdapter
+"""
+meta_projection_stability package exports
+"""
 
-from .governor import (
-    GovernorState,
-    compute_autonomy_index,
-    determine_mode,
-    governor_step,
-    governor_step_from_config,
-)
-
-from .integrity_barometer import (
-    IntegrityBarometerConfig,
-    IntegrityBarometerState,
-    barometer_step,
-)
-
-__version__ = "0.1.0-dev"
+from .config import MetaProjectionStabilityConfig, get_default_config, print_config
+from .simulation import run_simulation
+from .plotting import plot_results, print_summary
 
 __all__ = [
-    # Core
     "MetaProjectionStabilityConfig",
-    "MetaProjectionStabilityAdapter",
-    # Governor
-    "GovernorState",
-    "compute_autonomy_index",
-    "determine_mode",
-    "governor_step",
-    "governor_step_from_config",
-    # Integrity barometer
-    "IntegrityBarometerConfig",
-    "IntegrityBarometerState",
-    "barometer_step",
+    "get_default_config",
+    "print_config",
+    "run_simulation",
+    "plot_results",
+    "print_summary",
 ]
