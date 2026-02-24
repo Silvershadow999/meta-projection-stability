@@ -1,0 +1,29 @@
+name: Axiom Guard (Level-0)
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  axiom_guard:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install pytest
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest
+
+      - name: Verify Level-0 hash / fingerprint
+        run: |
+          pytest -q tests/level0/test_level0_fingerprint.py
