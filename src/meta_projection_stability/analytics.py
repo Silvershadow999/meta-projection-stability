@@ -1,454 +1,331 @@
-"""
-analytics.py
-
-Zusätzliche Auswertung / KPI-Utilities für meta-projection-stability.
-
-Ziel:
-- Simulations-Resultate verständlich auswerten
-- Safety Score berechnen
-- Kritische / Warn-Zeitanteile reporten
-- Präsentationsfähige Zusammenfassung liefern (CLI / Demo / Employer-ready)
-
-Erwartetes result-Format (flexibel):
-{
-    "risks": [...],              # bevorzugt
-    # oder alternative Keys:
-    "risk": [...],
-    "risk_history": [...],
-
-    # optional:
-    "trust": [...],
-    "human_significance": [...],
-    "integrity": [...],
-}
-"""
-
 from __future__ import annotations
 
-from typing import Any, Dict, Iterable, Optional, Tuple
-
+from typing import Any, List, Dict
 import math
-import numpy as np
+
+DEFAULT_CRITICAL_THRESHOLD = 0.80
 
 
-# ============================================================
-# Helpers
-# ============================================================
-
-def _to_float_array(values: Any) -> np.ndarray:
+def to_float_list(values: Any) -> List[float]:
     """
-    Konvertiert Listen / Tuples / NumPy-Arrays robust in float64-Array.
-    Nicht-finite Werte (inf, -inf) bleiben zunächst erhalten; NaNs werden später behandelt.
+    Robust konvertiert nahezu beliebige Eingaben in eine Liste von floats.
+    Unterstützt u. a.:
+    - Einzelwerte (int/float/np scalar)
+    - Listen / Tupel
+    - numpy arrays / pandas Series (iterierbar)
     """
     if values is None:
-        return np.asarray([], dtype=np.float64)
+        return []
 
-    if isinstance(values, np.ndarray):
-        return values.astype(np.float64, copy=False)
+    # Strings/Bytes nicht als Sequenz aus Zeichen interpretieren
+    if isinstance(values, (str, bytes, bytearray, memoryview)):
+        return []
 
-    if isinstance(values, (list, tuple)):
-        try:
-            return np.asarray(values, dtype=np.float64)
-        except Exception:
-            cleaned = []
-            for v in values:
-                try:
-                    cleaned.append(float(v))
-                except Exception:
-                    cleaned.append(np.nan)
-            return np.asarray(cleaned, dtype=np.float64)
-
-    # Fallback: einzelner Wert
+    # Einzelwert-Fall (schneller Pfad)
     try:
-        return np.asarray([float(values)], dtype=np.float64)
-    except Exception:
-        return np.asarray([], dtype=np.float64)
+        return [float(values)]
+    except (TypeError, ValueError):
+        pass
+
+    # Iterierbarer Fall
+    out: List[float] = []
+    try:
+        for item in values:
+            try:
+                out.append(float(item))
+            except (TypeError, ValueError):
+                continue
+    except TypeError:
+        # Nicht iterierbar
+        return []
+
+    return out
 
 
-def _finite_only(arr: np.ndarray) -> np.ndarray:
-    """Gibt nur finite Werte zurück."""
-    arr = np.asarray(arr, dtype=np.float64)
-    return arr[np.isfinite(arr)]
-
-
-def _safe_mean(arr: np.ndarray, default: float = 0.0) -> float:
-    arr = _finite_only(arr)
-    if arr.size == 0:
-        return float(default)
-    return float(np.mean(arr))
-
-
-def _safe_std(arr: np.ndarray, default: float = 0.0) -> float:
-    arr = _finite_only(arr)
-    if arr.size == 0:
-        return float(default)
-    return float(np.std(arr))
-
-
-def _safe_min(arr: np.ndarray, default: float = 0.0) -> float:
-    arr = _finite_only(arr)
-    if arr.size == 0:
-        return float(default)
-    return float(np.min(arr))
-
-
-def _safe_max(arr: np.ndarray, default: float = 0.0) -> float:
-    arr = _finite_only(arr)
-    if arr.size == 0:
-        return float(default)
-    return float(np.max(arr))
-
-
-# ============================================================
-# Result extraction
-# ============================================================
-
-def extract_risks(result: Dict[str, Any]) -> np.ndarray:
+def _get_by_dot_path(obj: Any, path: str) -> Any:
     """
-    Extrahiert Risikoverlauf robust aus verschiedenen möglichen Keys.
-
-    Bevorzugte Keys:
-    - "risks"
-    Alternativen:
-    - "risk"
-    - "risk_history"
-    - "risk_hist"
-
-    Returns:
-        np.ndarray (float64), ggf. leer
+    Holt verschachtelte Werte per Dot-Path, z. B. 'metrics.risk_history'.
+    Unterstützt dicts und attributbasierte Objekte.
     """
-    if not isinstance(result, dict):
-        return np.asarray([], dtype=np.float64)
+    current = obj
+    for part in path.split("."):
+        if current is None:
+            return None
 
-    for key in ("risks", "risk", "risk_history", "risk_hist"):
-        if key in result:
-            return _to_float_array(result.get(key))
+        if isinstance(current, dict):
+            current = current.get(part)
+            continue
 
-    return np.asarray([], dtype=np.float64)
+        # Attribut-Zugriff
+        if hasattr(current, part):
+            current = getattr(current, part, None)
+            continue
+
+        # Generisches .get()-Interface (falls vorhanden)
+        if hasattr(current, "get"):
+            try:
+                current = current.get(part)
+                continue
+            except Exception:
+                return None
+
+        return None
+    return current
 
 
-def extract_optional_series(result: Dict[str, Any], *keys: str) -> np.ndarray:
+def extract_risks(result: Any) -> List[float]:
     """
-    Extrahiert beliebige optionale Zeitreihen (z. B. trust, human_significance).
+    Extrahiert eine Risiko-Zeitreihe aus unterschiedlichen Strukturen.
+    Durchsucht:
+    - direkte Schlüssel/Attribute (z. B. risks, risk_history, risk)
+    - Dot-Paths (z. B. metrics.risk, metrics.risk_history)
+    - typische verschachtelte Container (metrics, history, logs, ...)
+    - Fallback: direkte Sequenz
     """
-    if not isinstance(result, dict):
-        return np.asarray([], dtype=np.float64)
+    if result is None:
+        return []
 
-    for key in keys:
-        if key in result:
-            return _to_float_array(result.get(key))
-    return np.asarray([], dtype=np.float64)
-
-
-# ============================================================
-# Core analytics
-# ============================================================
-
-def calculate_safety_score(
-    result: Dict[str, Any],
-    critical_threshold: float = 0.8,
-) -> float:
-    """
-    Berechnet einen einfachen Safety Score in Prozent.
-
-    Definition:
-      Safety = 100 * (1 - Anteil[risk > critical_threshold])
-
-    Hinweise:
-    - Nutzt nur finite Werte.
-    - Wenn keine Risiken vorhanden sind -> 0.0 (explizit konservativ).
-    """
-    risks = extract_risks(result)
-    risks = _finite_only(risks)
-
-    if risks.size == 0:
-        return 0.0
-
-    critical_moments = int(np.sum(risks > float(critical_threshold)))
-    total_steps = int(risks.size)
-
-    # Schritt-für-Schritt (saubere Rechnung)
-    ratio = critical_moments / total_steps
-    safety_percent = (1.0 - ratio) * 100.0
-
-    # Clamp auf [0, 100]
-    safety_percent = max(0.0, min(100.0, safety_percent))
-    return round(float(safety_percent), 2)
-
-
-def summarize_safety(
-    result: Dict[str, Any],
-    *,
-    critical_threshold: float = 0.8,
-    warn_threshold: float = 0.65,
-    tail_len: Optional[int] = None,
-) -> Dict[str, float]:
-    """
-    Liefert eine strukturierte Zusammenfassung (KPI-Dict), z. B. für CLI/JSON/Reports.
-
-    Enthaltene KPIs:
-    - safety_score_percent
-    - total_steps
-    - valid_steps
-    - critical_count / critical_fraction
-    - warn_count / warn_fraction
-    - risk_mean/std/min/max
-    - risk_tail_mean/std (optional; bei tail_len)
-    """
-    risks_raw = extract_risks(result)
-    valid_mask = np.isfinite(risks_raw)
-    risks = risks_raw[valid_mask]
-
-    total_steps = int(risks_raw.size)
-    valid_steps = int(risks.size)
-    invalid_steps = int(total_steps - valid_steps)
-
-    if valid_steps == 0:
-        return {
-            "safety_score_percent": 0.0,
-            "total_steps": float(total_steps),
-            "valid_steps": 0.0,
-            "invalid_steps": float(invalid_steps),
-            "critical_threshold": float(critical_threshold),
-            "warn_threshold": float(warn_threshold),
-            "critical_count": 0.0,
-            "critical_fraction": 0.0,
-            "warn_count": 0.0,
-            "warn_fraction": 0.0,
-            "risk_mean": 0.0,
-            "risk_std": 0.0,
-            "risk_min": 0.0,
-            "risk_max": 0.0,
-            "risk_tail_mean": 0.0,
-            "risk_tail_std": 0.0,
-        }
-
-    # Counts
-    critical_count = int(np.sum(risks > float(critical_threshold)))
-    warn_count = int(np.sum(risks > float(warn_threshold)))
-
-    # Fractions (bezogen auf valid_steps)
-    critical_fraction = critical_count / valid_steps
-    warn_fraction = warn_count / valid_steps
-
-    # Safety Score
-    safety_score = (1.0 - critical_fraction) * 100.0
-    safety_score = max(0.0, min(100.0, safety_score))
-
-    # Tail-Stats
-    if tail_len is None or tail_len <= 0:
-        tail = risks
-    else:
-        tail = risks[-int(tail_len):]
-
-    summary = {
-        "safety_score_percent": round(float(safety_score), 2),
-        "total_steps": float(total_steps),
-        "valid_steps": float(valid_steps),
-        "invalid_steps": float(invalid_steps),
-        "critical_threshold": float(critical_threshold),
-        "warn_threshold": float(warn_threshold),
-        "critical_count": float(critical_count),
-        "critical_fraction": round(float(critical_fraction), 6),
-        "warn_count": float(warn_count),
-        "warn_fraction": round(float(warn_fraction), 6),
-        "risk_mean": round(_safe_mean(risks), 6),
-        "risk_std": round(_safe_std(risks), 6),
-        "risk_min": round(_safe_min(risks), 6),
-        "risk_max": round(_safe_max(risks), 6),
-        "risk_tail_mean": round(_safe_mean(tail), 6),
-        "risk_tail_std": round(_safe_std(tail), 6),
-    }
-
-    return summary
-
-
-def classify_safety_status(score_percent: float) -> str:
-    """
-    Einfache, präsentationsfreundliche Klassifikation.
-    """
-    s = float(score_percent)
-    if s > 95.0:
-        return "EXCELLENT"
-    if s > 80.0:
-        return "STABLE"
-    return "CRITICAL"
-
-
-# ============================================================
-# Human-readable reporting
-# ============================================================
-
-def print_enhanced_summary(
-    result: Dict[str, Any],
-    *,
-    critical_threshold: float = 0.8,
-    warn_threshold: float = 0.65,
-    tail_len: Optional[int] = None,
-    title: str = "SICHERHEITS-BERICHT",
-) -> Dict[str, float]:
-    """
-    Druckt eine verständliche Zusammenfassung und gibt das Summary-Dict zurück.
-
-    Rückgabe:
-        summary (dict), damit du es zusätzlich speichern / weiterverarbeiten kannst.
-    """
-    summary = summarize_safety(
-        result,
-        critical_threshold=critical_threshold,
-        warn_threshold=warn_threshold,
-        tail_len=tail_len,
-    )
-
-    score = float(summary["safety_score_percent"])
-    status = classify_safety_status(score)
-
-    # Optional zusätzliche Reihen für Kontext
-    trust = extract_optional_series(result, "trust", "trusts", "trust_history")
-    human = extract_optional_series(result, "human_significance", "human", "human_history")
-    integrity = extract_optional_series(result, "integrity", "integrity_barometer", "barometer")
-
-    trust_mean = _safe_mean(trust, default=np.nan)
-    human_mean = _safe_mean(human, default=np.nan)
-    integrity_mean = _safe_mean(integrity, default=np.nan)
-
-    print("\n" + "=" * 42)
-    print(f"🛡️  {title}")
-    print("=" * 42)
-
-    print(f"Gesamt-Stabilität (Safety Score): {score:.2f}%")
-
-    if status == "EXCELLENT":
-        print("Status: ✅ EXZELLENT (Enterprise Ready)")
-    elif status == "STABLE":
-        print("Status: ⚠️ STABIL (Beobachtung empfohlen)")
-    else:
-        print("Status: 🛑 KRITISCH (Governance eingreifen)")
-
-    # Basiszahlen
-    total_steps = int(summary["total_steps"])
-    valid_steps = int(summary["valid_steps"])
-    invalid_steps = int(summary["invalid_steps"])
-    print(f"Schritte (gesamt/valide/invalid): {total_steps} / {valid_steps} / {invalid_steps}")
-
-    # Risk-KPIs
-    print(
-        "Risk stats: "
-        f"mean={summary['risk_mean']:.4f}, "
-        f"std={summary['risk_std']:.4f}, "
-        f"min={summary['risk_min']:.4f}, "
-        f"max={summary['risk_max']:.4f}"
-    )
-    print(
-        f"Warn-Anteil   (> {summary['warn_threshold']:.2f}): "
-        f"{100.0 * float(summary['warn_fraction']):.2f}% "
-        f"({int(summary['warn_count'])} Schritte)"
-    )
-    print(
-        f"Kritisch-Anteil (> {summary['critical_threshold']:.2f}): "
-        f"{100.0 * float(summary['critical_fraction']):.2f}% "
-        f"({int(summary['critical_count'])} Schritte)"
-    )
-
-    if tail_len is not None and tail_len > 0:
-        print(
-            f"Tail ({int(tail_len)} Schritte): "
-            f"risk_mean={summary['risk_tail_mean']:.4f}, "
-            f"risk_std={summary['risk_tail_std']:.4f}"
-        )
-
-    # Optionale Kontexte (nur wenn Daten vorhanden)
-    if np.isfinite(trust_mean):
-        print(f"Ø Trust: {trust_mean:.4f}")
-    if np.isfinite(human_mean):
-        print(f"Ø Human significance: {human_mean:.4f}")
-    if np.isfinite(integrity_mean):
-        print(f"Ø Integrity/Barometer: {integrity_mean:.4f}")
-
-    print("=" * 42 + "\n")
-    return summary
-
-
-# ============================================================
-# Optional: comparison helper (v2/v3 / baseline vs patched)
-# ============================================================
-
-def compare_safety_summaries(
-    left_summary: Dict[str, float],
-    right_summary: Dict[str, float],
-    left_name: str = "A",
-    right_name: str = "B",
-) -> Dict[str, float]:
-    """
-    Vergleicht zwei Summary-Dicts (z. B. v2 vs v3) und gibt Delta-KPIs zurück.
-    Positives Delta bei safety_score_percent bedeutet Verbesserung von left -> right.
-    """
-    keys = [
-        "safety_score_percent",
-        "critical_fraction",
-        "warn_fraction",
-        "risk_mean",
-        "risk_std",
-        "risk_tail_mean",
-        "risk_tail_std",
+    # Häufige direkte Keys / Attribute
+    candidate_keys = [
+        "risks",
+        "risk_history",
+        "risk_series",
+        "risk",
+        "risk_trace",
+        "risk_values",
+        "risk_levels",
+        "risk_scores",
+        "scores",
     ]
 
-    delta: Dict[str, float] = {}
-    for k in keys:
-        lv = float(left_summary.get(k, np.nan))
-        rv = float(right_summary.get(k, np.nan))
-        if np.isfinite(lv) and np.isfinite(rv):
-            delta[f"{k}_delta_{left_name}_to_{right_name}"] = rv - lv
+    # Dot-Paths (werden aktiv aufgelöst)
+    candidate_dot_paths = [
+        "metrics.risk",
+        "metrics.risk_history",
+        "metrics.risks",
+        "history.risk",
+        "history.risk_history",
+        "logs.risk",
+        "data.risk",
+        "results.risk",
+        "output.risk",
+    ]
 
-    return delta
+    nested_containers = [
+        "metrics",
+        "history",
+        "logs",
+        "data",
+        "results",
+        "output",
+        "details",
+        "evaluation",
+        "report",
+    ]
+
+    def try_extract(obj: Any) -> List[float]:
+        if obj is None:
+            return []
+
+        # Dict-Keys direkt
+        if isinstance(obj, dict):
+            for key in candidate_keys:
+                if key in obj:
+                    fl = to_float_list(obj.get(key))
+                    if fl:
+                        return fl
+
+        # Attribute
+        for key in candidate_keys:
+            if hasattr(obj, key):
+                fl = to_float_list(getattr(obj, key, None))
+                if fl:
+                    return fl
+
+        # .get()-Interface
+        if hasattr(obj, "get"):
+            try:
+                for key in candidate_keys:
+                    fl = to_float_list(obj.get(key))
+                    if fl:
+                        return fl
+            except Exception:
+                pass
+
+        return []
+
+    # 1) Direkte Extraktion
+    risks = try_extract(result)
+    if risks:
+        return risks
+
+    # 2) Dot-Path Extraktion
+    for path in candidate_dot_paths:
+        val = _get_by_dot_path(result, path)
+        fl = to_float_list(val)
+        if fl:
+            return fl
+
+    # 3) Eine Ebene verschachtelt
+    if isinstance(result, dict):
+        for container in nested_containers:
+            nested = result.get(container)
+            if nested is not None:
+                risks = try_extract(nested)
+                if risks:
+                    return risks
+
+    # 4) Fallback: vielleicht ist result selbst eine Sequenz mit Zahlen
+    return to_float_list(result)
 
 
-def print_comparison_report(
-    left_result: Dict[str, Any],
-    right_result: Dict[str, Any],
-    *,
-    left_name: str = "v2",
-    right_name: str = "v3",
-    critical_threshold: float = 0.8,
-    warn_threshold: float = 0.65,
-    tail_len: Optional[int] = None,
-) -> Tuple[Dict[str, float], Dict[str, float], Dict[str, float]]:
+def calculate_safety_score(
+    result: Any,
+    critical_threshold: float = DEFAULT_CRITICAL_THRESHOLD,
+) -> float:
     """
-    Druckt einen kurzen Vergleichsreport für zwei Runs.
-    Praktisch für: "Welcher Code ist besser?" (v2 vs v3 / baseline vs patch)
+    Berechnet einen Safety-Score:
+    100% - Anteil der Zeitpunkte, an denen Risiko > critical_threshold war.
     """
-    left_summary = summarize_safety(
-        left_result,
-        critical_threshold=critical_threshold,
-        warn_threshold=warn_threshold,
-        tail_len=tail_len,
+    risks = extract_risks(result)
+    if not risks:
+        return 0.0
+
+    n = len(risks)
+    critical_count = sum(1 for r in risks if r > critical_threshold)
+    safe_ratio = 1.0 - (critical_count / n)
+    score = safe_ratio * 100.0
+    return round(max(0.0, min(100.0, score)), 2)
+
+
+def summarize_risk_profile(
+    result: Any,
+    critical_threshold: float = DEFAULT_CRITICAL_THRESHOLD
+) -> Dict[str, Any]:
+    """
+    Erweiterte Statistik für Reporting / Dashboards / Präsentationen.
+    """
+    risks = extract_risks(result)
+    if not risks:
+        return {
+            "valid": False,
+            "count": 0,
+            "min": None,
+            "max": None,
+            "mean": None,
+            "median": None,
+            "p95": None,
+            "critical_share_percent": None,
+            "safety_score": 0.0,
+        }
+
+    import statistics  # lazy import
+
+    n = len(risks)
+    sorted_risks = sorted(risks)
+    critical_count = sum(1 for r in risks if r > critical_threshold)
+
+    # Robuste p95-Approximation ohne NumPy
+    if n >= 1:
+        idx = max(0, min(n - 1, math.ceil(n * 0.95) - 1))
+        p95 = sorted_risks[idx]
+    else:
+        p95 = None
+
+    return {
+        "valid": True,
+        "count": n,
+        "min": round(min(risks), 4),
+        "max": round(max(risks), 4),
+        "mean": round(sum(risks) / n, 4),
+        "median": round(statistics.median(risks), 4),
+        "p95": round(p95, 4) if p95 is not None else None,
+        "critical_share_percent": round((critical_count / n) * 100.0, 2),
+        "safety_score": calculate_safety_score(result, critical_threshold),
+    }
+
+
+def print_risk_summary(
+    result: Any,
+    critical_threshold: float = DEFAULT_CRITICAL_THRESHOLD,
+    title: str = "SICHERHEITS- & STABILITÄTS-BEWERTUNG",
+) -> None:
+    """
+    Menschlich lesbare, management-taugliche Zusammenfassung.
+    """
+    profile = summarize_risk_profile(result, critical_threshold)
+
+    print("\n" + "═" * 60)
+    print(f"🛡️  {title.upper()}")
+    print("═" * 60)
+
+    if not profile["valid"]:
+        print("⚠️  Keine verwertbare Risiko-Zeitreihe gefunden.")
+        print("    Erwartete Schlüssel (Beispiele):")
+        print("    'risks', 'risk_history', 'risk', 'metrics.risk_history', ...")
+        print("═" * 60 + "\n")
+        return
+
+    score = profile["safety_score"]
+    crit_pct = profile["critical_share_percent"]
+    p95_str = f"{profile['p95']:6.4f}" if profile["p95"] is not None else "  n/a "
+
+    print(f"  Stabilitäts-Score:           {score:6.1f} %")
+    print(f"  Messpunkte:                  {profile['count']:,}")
+    print(
+        f"  Risiko (min / Median / max): "
+        f"{profile['min']:6.4f} / {profile['median']:6.4f} / {profile['max']:6.4f}"
     )
-    right_summary = summarize_safety(
-        right_result,
-        critical_threshold=critical_threshold,
-        warn_threshold=warn_threshold,
-        tail_len=tail_len,
-    )
+    print(f"  Kritischer Anteil (> {critical_threshold:.2f}): {crit_pct:6.1f} %")
+    print(f"  95%-Quantil:                 {p95_str}")
 
-    delta = compare_safety_summaries(left_summary, right_summary, left_name, right_name)
+    if score >= 97:
+        status = "✅  EXZELLENT – produktionsreif"
+    elif score >= 90:
+        status = "👍  GUT – mit leichtem Monitoring einsetzbar"
+    elif score >= 80:
+        status = "⚠️  BEDENKLICH – Optimierung / Beobachtung erforderlich"
+    else:
+        status = "🛑  KRITISCH – vor Einsatz überarbeiten / stoppen"
 
-    print("\n" + "=" * 50)
-    print(f"📊 VERGLEICH: {left_name}  vs  {right_name}")
-    print("=" * 50)
-    print(f"{left_name} Safety Score:  {left_summary['safety_score_percent']:.2f}%")
-    print(f"{right_name} Safety Score: {right_summary['safety_score_percent']:.2f}%")
+    print("\n  Bewertung:  " + status)
+    print("═" * 60 + "\n")
 
-    k = f"safety_score_percent_delta_{left_name}_to_{right_name}"
-    if k in delta:
-        print(f"Δ Safety Score ({left_name}→{right_name}): {delta[k]:+.2f} %-Punkte")
 
-    kc = f"critical_fraction_delta_{left_name}_to_{right_name}"
-    if kc in delta:
-        print(f"Δ Kritisch-Anteil: {100.0 * delta[kc]:+.2f} %-Punkte")
+# Alias für Kompatibilität zu älteren Imports / Beispielen
+def print_enhanced_summary(
+    result: Any,
+    critical_threshold: float = DEFAULT_CRITICAL_THRESHOLD
+) -> None:
+    """
+    Backward-compatible Alias.
+    """
+    print_risk_summary(result, critical_threshold=critical_threshold)
 
-    kw = f"warn_fraction_delta_{left_name}_to_{right_name}"
-    if kw in delta:
-        print(f"Δ Warn-Anteil: {100.0 * delta[kw]:+.2f} %-Punkte")
 
-    print("=" * 50 + "\n")
-    return left_summary, right_summary, delta
+# ────────────────────────────────────────────────
+# Beispiel-Nutzung / Selbsttest
+# ────────────────────────────────────────────────
+if __name__ == "__main__":
+    # 1) Verschachtelte Struktur
+    test_data = {
+        "metadata": {"model": "meta-llama-3-70b"},
+        "metrics": {
+            "risk_history": [0.12, 0.18, 0.75, 0.92, 0.88, 0.41, 0.09],
+            "other": "ignored",
+        },
+    }
+
+    # 2) Direkte Liste
+    test_list = [0.1, 0.2, 0.95, 0.99, 0.03]
+
+    # 3) Einzelwert
+    test_scalar = {"risk": 0.77}
+
+    # 4) Schlechter Fall
+    test_bad = object()
+
+    print_risk_summary(test_data)
+    print_risk_summary(test_list)
+    print_risk_summary(test_scalar)
+    print_risk_summary(test_bad)
