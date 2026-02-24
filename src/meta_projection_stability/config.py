@@ -39,6 +39,7 @@ class MetaProjectionStabilityConfig:
     risk_warn: float = 0.65
     risk_floor: float = 0.00
     risk_ceiling: float = 1.00
+    risk_clip_max: float = 1.00
     min_risk_for_decay: float = 0.05
 
     # ─── Trust & Human Significance ────────────────────────────────────
@@ -85,10 +86,28 @@ class MetaProjectionStabilityConfig:
     worldbank_indicator: str = "NY.GDP.MKTP.KD.ZG"  # Beispiel: GDP growth
     globalsense_scale: float = 1.0
 
+    # ─── Erweiterte Dynamics / Adapter-Kompatibilität ─────────────────
+    negative_delta_is_risky: bool = True
+    risk_trust_damping_max: float = 0.35
+    risk_clip_max: float = 1.00
+    ema_alpha_risk: float = 0.12
+    ema_alpha_human: float = 0.09
+    human_sig_max: float = 1.10
+
     # ─── Debugging & Kompatibilität ────────────────────────────────────
     verbose: bool = False
     debug: bool = False
     profile_name: str = "default"
+
+    # ─── Kompatibilitätsflags (Adapter / ältere Experimente) ──────────────
+    negative_delta_is_risky: bool = True
+    momentum_alert_threshold: float = 0.05
+    momentum_risk_weight: float = 0.10
+    cooldown_steps_after_reset: int = 10
+    nominal_recovery_boost_factor: float = 1.0
+    risk_trust_damping_max: float = 0.35
+    human_sig_max: float = 1.10
+    ema_alpha_human: float = 0.09
 
     # Optionales Metadaten-Feld (nicht zwingend genutzt, aber praktisch)
     tags: List[str] = field(default_factory=list)
@@ -105,6 +124,7 @@ class MetaProjectionStabilityConfig:
             "momentum_alpha",
             "risk_floor",
             "risk_ceiling",
+            "risk_clip_max",
             "min_risk_for_decay",
             "trust_floor",
             "trust_ceiling",
@@ -130,7 +150,10 @@ class MetaProjectionStabilityConfig:
             "autonomy_floor",
             "autonomy_ceiling",
             "globalsense_scale",
-        ]
+                    "risk_trust_damping_max",
+            "ema_alpha_risk",
+            "ema_alpha_human",
+]
 
         for fname in fields_0_to_1:
             v = getattr(self, fname, None)
@@ -141,6 +164,7 @@ class MetaProjectionStabilityConfig:
         self.coherence_normalizer = max(1e-9, float(self.coherence_normalizer or 1.0))
         self.risk_penalty_factor = max(0.0, float(self.risk_penalty_factor or 1.0))
         self.trust_penalty_factor = max(0.0, float(self.trust_penalty_factor or 1.0))
+        self.human_sig_max = max(0.0, float(self.human_sig_max or 1.0))
 
         # Integer / positive Werte
         self.n_steps = max(1, int(self.n_steps))
@@ -214,6 +238,13 @@ class MetaProjectionStabilityConfig:
             "recovery_base": self.human_recovery_base,
             "plot": self.enable_plot,
             "steps": self.n_steps,
+            # v2/v3 threshold aliases
+            "risk_warning_threshold": self.risk_warn,
+            "risk_critical_threshold": self.risk_critical,
+            "risk_recovery_threshold": self.risk_recover,
+            "risk_warn_threshold": self.risk_warn,
+            "risk_crit_threshold": self.risk_critical,
+            "risk_recover_threshold": self.risk_recover,
         }
 
         for name, value in aliases.items():
