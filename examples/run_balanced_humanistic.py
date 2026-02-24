@@ -5,6 +5,9 @@ from meta_projection_stability import (
     print_summary,
 )
 
+# NEU:
+from meta_projection_stability.analytics import print_enhanced_summary
+
 
 def main():
     cfg = MetaProjectionStabilityConfig(
@@ -22,6 +25,10 @@ def main():
     )
 
     result = run_simulation(n_steps=1400, levels=3, seed=42, stress_test=True, cfg=cfg)
+
+    # NEU: verständlicher Sicherheitsbericht
+    print_enhanced_summary(result)
+
     plot_results(result)
     print_summary(result)
 
