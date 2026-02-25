@@ -16,6 +16,7 @@ class MetaProjectionStabilityAdapter:
       - momentum-based warning
       - risk damping via trust
       - hysteresis and cooldown
+      - optional biometric / consensus diagnostics (soft penalty only)
     """
 
     def __init__(self, cfg: Optional[MetaProjectionStabilityConfig] = None):
@@ -36,10 +37,117 @@ class MetaProjectionStabilityAdapter:
         self._last_reason: str = "stable"
         self._last_decision: str = "CONTINUE"
 
+    # ------------------------------------------------------------------
+    # Optional biometric proxy helper (safe, no config dependency required)
+    # ------------------------------------------------------------------
+    def _compute_biometric_proxy(self, raw_signals: Dict[str, float]) -> Dict[str, float]:
+        """
+        Build a robust biometric proxy and sensor consensus estimate.
+
+        This method is intentionally defensive:
+        - If no biometric signals are present, it returns neutral defaults.
+        - If explicit 'sensor_consensus' is provided, it overrides computed consensus.
+        - Critical-channel penalty is soft-capped and can be used downstream as a mild decay modifier.
+        """
+
+        # Collect candidate channels (only those present)
+        # You can expand this list later without breaking compatibility.
+        candidate_keys = [
+            "hrv",
+            "resp_variability",
+            "skin_temp_stability",
+            "eda_stability",
+            "sleep_quality",
+            "attention_stability",
+            "biometric_proxy",       # explicit override possible
+            "biometric_proxy_mean",  # explicit debug/override possible
+        ]
+
+        vals = []
+        for k in candidate_keys:
+            if k in raw_signals:
+                try:
+                    vals.append(float(np.clip(raw_signals[k], 0.0, 1.0)))
+                except Exception:
+                    # Ignore malformed values silently (robust telemetry behavior)
+                    pass
+
+        # Neutral defaults if nothing exists
+        if len(vals) == 0:
+            biometric_proxy_mean = 0.75
+            sensor_consensus = 0.75
+        else:
+            arr = np.asarray(vals, dtype=float)
+
+            # Robust central estimate: mean of clipped values
+            robust_core = float(np.mean(arr))
+
+            # Optional support mean (same array here; placeholder for future split logic)
+            support_mean = float(np.mean(arr))
+
+            # Base proxy
+            biometric_proxy_mean = float(np.clip(0.8 * robust_core + 0.2 * support_mean, 0.0, 1.0))
+
+            # Consensus: high when spread is low
+            sensor_consensus = float(np.clip(1.0 - np.std(arr), 0.0, 1.0))
+
+        # Explicit overrides (if caller injects them)
+        if "sensor_consensus" in raw_signals:
+            sensor_consensus = float(np.clip(raw_signals.get("sensor_consensus", sensor_consensus), 0.0, 1.0))
+
+        if "biometric_proxy_mean" in raw_signals:
+            biometric_proxy_mean = float(np.clip(raw_signals.get("biometric_proxy_mean", biometric_proxy_mean), 0.0, 1.0))
+
+        # If caller provides a final biometric proxy directly, use as base proxy before penalty
+        biometric_proxy_pre_penalty = biometric_proxy_mean
+        if "biometric_proxy" in raw_signals:
+            biometric_proxy_pre_penalty = float(np.clip(raw_signals.get("biometric_proxy", biometric_proxy_pre_penalty), 0.0, 1.0))
+
+        # Minimal critical-channel proxy in this simplified version:
+        # we use consensus as a proxy for weakest critical channel quality
+        critical_channel_min = float(sensor_consensus)
+
+        # Soft penalty (bounded). Threshold 0.35 chosen to avoid overreaction.
+        critical_channel_penalty = float(max(0.0, min(0.35, 0.35 - critical_channel_min)))
+
+        # Optional: apply penalty to final biometric proxy (soft damped)
+        biometric_proxy = float(
+            max(0.0, min(1.0, biometric_proxy_pre_penalty - 0.6 * critical_channel_penalty))
+        )
+
+        return {
+            "biometric_proxy": biometric_proxy,
+            "biometric_proxy_mean": biometric_proxy_mean,
+            "critical_channel_min": critical_channel_min,
+            "critical_channel_penalty": critical_channel_penalty,
+            "sensor_consensus": sensor_consensus,
+        }
+
     def interpret(self, S_layers: np.ndarray, delta_S: float, raw_signals: Dict[str, float]) -> Dict[str, Any]:
         self.step += 1
         delta_S = float(delta_S)
         self.delta_s_history.append(delta_S)
+
+        # 0) Optional biometric diagnostics / soft penalties (safe defaults)
+        enable_biometric_proxy = bool(getattr(self.cfg, "enable_biometric_proxy", True))
+        if enable_biometric_proxy:
+            bio = self._compute_biometric_proxy(raw_signals)
+        else:
+            bio = {
+                "biometric_proxy": 0.75,
+                "biometric_proxy_mean": 0.75,
+                "critical_channel_min": 0.75,
+                "critical_channel_penalty": 0.0,
+                "sensor_consensus": 0.75,
+            }
+
+        bio_proxy = float(bio["biometric_proxy"])
+        bio_penalty = float(getattr(self.cfg, "biometric_proxy_weight", 0.12)) * (1.0 - bio_proxy)
+
+        consensus_penalty = 0.0
+        consensus_floor = float(getattr(self.cfg, "sensor_consensus_floor", 0.15))
+        if float(bio["sensor_consensus"]) < consensus_floor:
+            consensus_penalty = 0.08 * (consensus_floor - float(bio["sensor_consensus"]))
 
         # 1) Momentum (delta of delta_S)
         if len(self.delta_s_history) >= 2:
@@ -92,12 +200,17 @@ class MetaProjectionStabilityAdapter:
         )
 
         # 7) Base continuous update terms
+        # Add only SOFT biometric/consensus penalties to decay (bounded by clipping later)
         base_decay = self.cfg.human_decay_scale * self.instability_risk
+        base_decay = float(np.clip(base_decay + bio_penalty + consensus_penalty, 0.0, 2.0))
+
         recovery_bonus = self.cfg.human_recovery_base * (self.trust_level ** self.cfg.recovery_trust_power)
 
         # 8) Hysteresis / Schmitt-trigger + decision logic
         decision = "CONTINUE"
         status = "nominal"
+        decision_reason = "risk_below_warning"
+        status_reason = "stable_nominal"
 
         if self._cooldown_remaining > 0:
             self._cooldown_remaining -= 1
@@ -108,6 +221,8 @@ class MetaProjectionStabilityAdapter:
             ))
             status = "cooldown"
             decision = "BLOCK_AND_REFLECT"
+            status_reason = "cooldown_active"
+            decision_reason = "cooldown_gate"
 
         else:
             # Critical conditions:
@@ -124,6 +239,11 @@ class MetaProjectionStabilityAdapter:
 
                 status = "critical_instability_reset"
                 decision = "EMERGENCY_RESET"
+                status_reason = "critical_threshold_breach"
+                if self.instability_risk >= self.cfg.risk_critical_threshold:
+                    decision_reason = "risk_critical_threshold"
+                else:
+                    decision_reason = "human_ema_below_critical"
 
             elif self.instability_risk <= self.cfg.risk_recovery_threshold:
                 # Safe zone / recovery
@@ -134,6 +254,8 @@ class MetaProjectionStabilityAdapter:
                 ))
                 status = "nominal"
                 decision = "CONTINUE"
+                status_reason = "risk_below_recovery_threshold"
+                decision_reason = "recovery_nominal"
 
             else:
                 # Transition band / hysteresis
@@ -143,13 +265,17 @@ class MetaProjectionStabilityAdapter:
                     self.human_significance - transition_decay + recovery_bonus * 0.25
                 ))
                 status = "transitioning"
+                status_reason = "hysteresis_transition_band"
 
                 if self.human_ema < self.cfg.interestingness_warning:
                     decision = "BLOCK_AND_REFLECT"
+                    decision_reason = "human_ema_below_warning"
                 elif self.instability_risk >= self.cfg.risk_warning_threshold:
                     decision = "BLOCK_AND_REFLECT"
+                    decision_reason = "risk_warning_threshold"
                 else:
                     decision = "CONTINUE"
+                    decision_reason = "transition_but_still_acceptable"
 
         self.human_significance = float(np.clip(self.human_significance, 0.0, self.cfg.human_sig_max))
 
@@ -165,14 +291,31 @@ class MetaProjectionStabilityAdapter:
         return {
             "decision": decision,
             "status": status,
+            "decision_reason": str(decision_reason),
+            "status_reason": str(status_reason),
+
             "human_significance": float(self.human_significance),
             "h_sig_ema": float(self.human_ema),
+
             "instability_risk": float(self.instability_risk),
             "risk_raw_damped": float(self.raw_instability_risk),
+
             "trust_level": float(self.trust_level),
             "momentum": float(momentum),
             "coherence": float(coherence_level),
             "risk_input": float(risk_input),
             "trust_damping": float(trust_damping),
             "cooldown_remaining": int(self._cooldown_remaining),
+
+            # Biometric / neuro diagnostics (optional but always present for stable API)
+            "biometric_proxy": float(bio["biometric_proxy"]),
+            "biometric_proxy_mean": float(bio["biometric_proxy_mean"]),
+            "critical_channel_min": float(bio["critical_channel_min"]),
+            "critical_channel_penalty": float(bio["critical_channel_penalty"]),
+            "sensor_consensus": float(bio["sensor_consensus"]),
+
+            # Penalty telemetry (helps verify effect in tests)
+            "biometric_penalty": float(bio_penalty),
+            "consensus_penalty": float(consensus_penalty),
+            "base_decay_effective": float(base_decay),
         }
