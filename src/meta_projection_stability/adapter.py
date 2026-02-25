@@ -135,6 +135,88 @@ class MetaProjectionStabilityAdapter:
             "gamma_coherence_proxy": gamma,
         }
 
+
+    def _compute_signal_guard_penalty(self, bio: dict, raw_signals: dict) -> dict:
+        """
+        Lightweight consistency / suspicious-signal checks (Step 16B).
+
+        Returns a dict with:
+        - suspicious_score (0..1)
+        - consistency_penalty (>=0)
+        - suspicious_flag (bool)
+        - reasons (list[str])
+        """
+        cfg = self.cfg
+        if not getattr(cfg, "enable_signal_guard", True):
+            return {
+                "suspicious_score": 0.0,
+                "consistency_penalty": 0.0,
+                "suspicious_flag": False,
+                "reasons": [],
+            }
+
+        reasons = []
+        score = 0.0
+
+        # Pull normalized channels (with safe defaults)
+        hrv = float(bio.get("hrv_normalized", bio.get("hrv_norm", 0.5)))
+        eda = float(bio.get("eda_stress_score", bio.get("eda_stress", 0.5)))
+        valence = float(bio.get("valence_unit", 0.5))
+        autonomy = float(bio.get("autonomy_proxy", 0.5))
+        dependency = float(bio.get("dependency_risk", 0.0))
+        tamper = float(bio.get("tamper_suspicion", 0.0))
+        consensus = float(bio.get("sensor_consensus", 1.0))
+
+        # 1) Physiological inconsistency cluster
+        if (
+            hrv >= cfg.hrv_high_threshold
+            and eda >= cfg.eda_high_threshold
+            and valence <= cfg.valence_low_threshold
+        ):
+            score += 0.45
+            reasons.append("hrv_high+eda_high+valence_low")
+
+        # 2) Low autonomy + high dependency (possible pressure / coercion pattern)
+        if (
+            autonomy <= cfg.autonomy_low_threshold
+            and dependency >= cfg.dependency_high_threshold
+        ):
+            score += 0.30
+            reasons.append("autonomy_low+dependency_high")
+
+        # 3) Tamper suspicion directly contributes
+        if tamper >= cfg.tamper_suspicion_high_threshold:
+            score += 0.35
+            reasons.append("tamper_suspicion_high")
+
+        # 4) Low sensor consensus means packet quality is weak / conflicting
+        if consensus < cfg.sensor_consensus_floor:
+            deficit = (cfg.sensor_consensus_floor - consensus) / max(cfg.sensor_consensus_floor, 1e-9)
+            score += 0.25 * float(max(0.0, min(1.0, deficit)))
+            reasons.append("sensor_consensus_low")
+
+        # 5) Optional explicit spoof/fake flag from upstream systems
+        if float(raw_signals.get("spoof_flag", 0.0)) > 0.5:
+            score += 0.60
+            reasons.append("upstream_spoof_flag")
+
+        score = float(max(0.0, min(1.0, score)))
+        suspicious_flag = bool(score >= cfg.suspicious_signal_threshold)
+
+        consistency_penalty = 0.0
+        if suspicious_flag:
+            consistency_penalty += float(cfg.signal_guard_penalty_weight) * score
+        # Always allow a soft penalty for weak consistency even below threshold
+        consistency_penalty += float(cfg.consistency_penalty_weight) * (score ** 2)
+
+        return {
+            "suspicious_score": float(score),
+            "consistency_penalty": float(consistency_penalty),
+            "suspicious_flag": suspicious_flag,
+            "reasons": reasons,
+        }
+
+
     def interpret(self, S_layers: np.ndarray, delta_S: float, raw_signals: Dict[str, float]) -> Dict[str, Any]:
         self.step += 1
         delta_S = float(delta_S)
@@ -175,6 +257,9 @@ class MetaProjectionStabilityAdapter:
                 "autonomy_proxy": 0.75,
                 "gamma_coherence_proxy": 0.70,
             }
+
+        # 3c) Signal consistency / spoofing guard (Step 16B)
+        guard_info = self._compute_signal_guard_penalty(bio=bio, raw_signals=raw_signals)
 
         # 4) Trust dynamics (asymmetric + momentum early warning)
         if risk_input > self.cfg.min_risk_for_decay or abs(momentum) > self.cfg.momentum_alert_threshold:
@@ -407,6 +492,10 @@ class MetaProjectionStabilityAdapter:
             "coherence": float(coherence_level),
             "risk_input": float(risk_input),
             "trust_damping": float(trust_damping),
+            "suspicious_score": float(guard_info["suspicious_score"]),
+            "consistency_penalty": float(guard_info["consistency_penalty"]),
+            "suspicious_flag": bool(guard_info["suspicious_flag"]),
+            "signal_guard_reasons": list(guard_info["reasons"]),
             "action_tier": int(action_tier),
             "context_criticality": float(context_criticality),
             "policy_risk": float(self.policy_risk),
