@@ -150,9 +150,14 @@ class MetaProjectionStabilityAdapter:
         S_abs = np.abs(np.asarray(S_layers, dtype=float))
         S_mean = float(np.mean(S_abs)) if S_abs.size > 0 else 0.0
         coherence_level = float(np.clip(S_mean / self.cfg.coherence_normalizer, 0.0, 1.0))
+        self.coherence = coherence_level
 
         # 3) External instability signal
         risk_input = float(np.clip(raw_signals.get("instability_signal", 0.0), 0.0, 1.0))
+
+        # 3b) Optional policy/context inputs (Step 16A)
+        action_tier = int(np.clip(raw_signals.get("action_tier", 0), 0, 3))
+        context_criticality = float(np.clip(raw_signals.get("context_criticality", 0.0), 0.0, 1.0))
 
         # 3b) Optional biometric / neuro-behavioral proxies
         if getattr(self.cfg, "enable_biometric_proxy", True):
@@ -208,6 +213,19 @@ class MetaProjectionStabilityAdapter:
             self.cfg.ema_alpha_risk * current_risk +
             (1.0 - self.cfg.ema_alpha_risk) * self.instability_risk
         )
+
+        # 6b) Policy risk (Step 16A): combine risk with action-tier and context criticality
+        action_tier_norm = float(action_tier / 3.0)
+        if getattr(self.cfg, "enable_action_tiering", True):
+            policy_risk = (
+                self.instability_risk
+                + float(self.cfg.action_tier_weight) * action_tier_norm
+                + float(self.cfg.context_criticality_weight) * context_criticality
+            )
+        else:
+            policy_risk = self.instability_risk
+        policy_risk = float(np.clip(policy_risk, 0.0, 1.0))
+        self.policy_risk = policy_risk
 
         # 7) Base continuous update terms
         base_decay = self.cfg.human_decay_scale * self.instability_risk
@@ -276,17 +294,31 @@ class MetaProjectionStabilityAdapter:
             # Critical conditions:
             #  - risk too high
             #  - human anchor collapsed
+            lock_cond = (
+                self.policy_risk >= getattr(self.cfg, "lockdown_threshold", 0.85)
+                and action_tier >= getattr(self.cfg, "lockdown_action_tier_min", 3)
+                and (
+                    self.instability_risk >= self.cfg.risk_warning_threshold
+                    or self.human_ema <= self.cfg.interestingness_warning
+                )
+            )
+
             if (
                 self.instability_risk >= self.cfg.risk_critical_threshold
                 or self.human_ema <= self.cfg.interestingness_critical
+                or lock_cond
             ):
                 self.human_significance = float(self.cfg.reset_human_to)
                 self.human_ema = float(self.cfg.reset_human_to)
                 self.trust_level = float(max(self.cfg.trust_floor, self.trust_level * 0.6))
                 self._cooldown_remaining = int(self.cfg.cooldown_steps_after_reset)
 
-                status = "critical_instability_reset"
-                decision = "EMERGENCY_RESET"
+                if lock_cond:
+                    status = "emergency_lockdown"
+                    decision = "EMERGENCY_LOCKDOWN"
+                else:
+                    status = "critical_instability_reset"
+                    decision = "EMERGENCY_RESET"
                 status_reason = "risk_or_anchor_critical"
                 if self.instability_risk >= self.cfg.risk_critical_threshold:
                     decision_reason = "risk_critical_threshold"
@@ -375,6 +407,9 @@ class MetaProjectionStabilityAdapter:
             "coherence": float(coherence_level),
             "risk_input": float(risk_input),
             "trust_damping": float(trust_damping),
+            "action_tier": int(action_tier),
+            "context_criticality": float(context_criticality),
+            "policy_risk": float(self.policy_risk),
             "cooldown_remaining": int(self._cooldown_remaining),
 
             # Biometric / neuro diagnostics

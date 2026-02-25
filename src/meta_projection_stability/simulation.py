@@ -101,6 +101,9 @@ def run_simulation(
         "momentum": [],
         "risk_input": [],
         "trust_damping": [],
+        "action_tier": [],
+        "context_criticality": [],
+        "policy_risk": [],
         "S2": [],
         "delta_S": [],
 
@@ -190,6 +193,9 @@ def run_simulation(
         history["momentum"].append(res["momentum"])
         history["risk_input"].append(res["risk_input"])
         history["trust_damping"].append(res["trust_damping"])
+        history["action_tier"].append(res.get("action_tier", 0))
+        history["context_criticality"].append(res.get("context_criticality", 0.0))
+        history["policy_risk"].append(res.get("policy_risk", res["instability_risk"]))
         history["S2"].append(S[s_idx, t])
         history["delta_S"].append(delta_S)
 

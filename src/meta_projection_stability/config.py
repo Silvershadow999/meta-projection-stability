@@ -114,6 +114,17 @@ class MetaProjectionStabilityConfig:
     transition_decay_factor: float = 0.65
     cooldown_human_recovery_step: float = 0.02
 
+
+    # ─── Policy / Action Tiering (Step 16A) ───────────────────────────
+    enable_action_tiering: bool = True
+    action_tier_weight: float = 0.20          # zusätzlicher Risikoanteil aus action_tier (0..3 -> 0..1)
+    context_criticality_weight: float = 0.20  # zusätzlicher Risikoanteil aus Kontext (0..1)
+
+    degraded_verify_threshold: float = 0.55   # policy_risk ab hier -> DEGRADED_VERIFY_MODE
+    lockdown_threshold: float = 0.85          # policy_risk ab hier + kritische Lage -> EMERGENCY_LOCKDOWN
+    block_action_tier_min: int = 2            # ab welchem Tier BLOCK/VERIFY stärker greift
+    lockdown_action_tier_min: int = 3         # nur höchste Tiers dürfen Lockdown auslösen
+
     # ─── Debugging & Kompatibilität ────────────────────────────────────
     verbose: bool = False
     debug: bool = False
@@ -173,6 +184,10 @@ class MetaProjectionStabilityConfig:
                     "risk_trust_damping_max",
             "ema_alpha_risk",
             "ema_alpha_human",
+            "action_tier_weight",
+            "context_criticality_weight",
+            "degraded_verify_threshold",
+            "lockdown_threshold",
 ]
 
         for fname in fields_0_to_1:
@@ -191,6 +206,8 @@ class MetaProjectionStabilityConfig:
         self.delta_history_len = max(2, int(self.delta_history_len or 64))
         self.dt = max(1e-6, float(self.dt))
         self.seed = max(0, int(self.seed))
+        self.block_action_tier_min = max(0, min(3, int(self.block_action_tier_min)))
+        self.lockdown_action_tier_min = max(0, min(3, int(self.lockdown_action_tier_min)))
 
         # Ceiling/Floor-Konsistenz
         for pair in ["risk", "trust", "human_significance", "autonomy"]:
@@ -265,6 +282,8 @@ class MetaProjectionStabilityConfig:
             "risk_warn_threshold": self.risk_warn,
             "risk_crit_threshold": self.risk_critical,
             "risk_recover_threshold": self.risk_recover,
+            "policy_degraded_threshold": self.degraded_verify_threshold,
+            "policy_lockdown_threshold": self.lockdown_threshold,
         }
 
         for name, value in aliases.items():
