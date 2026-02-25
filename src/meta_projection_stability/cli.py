@@ -81,3 +81,5 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
+from .adversarial import run_adversarial_scenario, run_all_scenarios
