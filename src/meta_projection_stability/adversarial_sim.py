@@ -280,3 +280,195 @@ if __name__ == "__main__":
     cfg = MetaProjectionStabilityConfig(seed=42, enable_plot=False, debug=False, verbose=False)
     suite = run_adversarial_suite(cfg=cfg, seed=42, steps_override=1500)
     print_adversarial_suite_summary(suite)
+
+
+def run_adversarial_suite_multi_seed(
+    scenario_names: Optional[List[str]] = None,
+    cfg: Optional[MetaProjectionStabilityConfig] = None,
+    seeds: Optional[List[int]] = None,
+    steps_override: Optional[int] = None,
+    debug: bool = False,
+) -> Dict[str, Any]:
+    """
+    Run adversarial suite across multiple seeds and aggregate key metrics per scenario.
+
+    Returns:
+      {
+        "multi_seed_valid": True,
+        "seeds": [...],
+        "scenario_names": [...],
+        "per_seed": {seed: suite_result, ...},
+        "aggregate": [
+           {
+             "scenario": ...,
+             "runs": N,
+             "continue_rate_mean": ...,
+             "continue_rate_std": ...,
+             ...
+           }, ...
+        ]
+      }
+    """
+    import math
+    import statistics
+
+    if seeds is None or len(seeds) == 0:
+        seeds = [42, 43, 44, 45, 46]
+
+    scenarios = get_default_adversarial_scenarios()
+    names = scenario_names or list(scenarios.keys())
+
+    per_seed: Dict[str, Any] = {}
+    rows_by_scenario: Dict[str, List[Dict[str, Any]]] = {name: [] for name in names}
+
+    for seed in seeds:
+        suite = run_adversarial_suite(
+            scenario_names=names,
+            cfg=cfg,
+            seed=int(seed),
+            steps_override=steps_override,
+            debug=debug,
+        )
+        per_seed[str(int(seed))] = suite
+
+        for row in suite.get("summary", []) or []:
+            sc = row.get("scenario")
+            if sc in rows_by_scenario:
+                rows_by_scenario[sc].append(row)
+
+    def _to_float_list(values):
+        out = []
+        for v in values:
+            try:
+                fv = float(v)
+                if math.isfinite(fv):
+                    out.append(fv)
+            except (TypeError, ValueError):
+                continue
+        return out
+
+    def _agg(vals):
+        vals = _to_float_list(vals)
+        if not vals:
+            return {"mean": None, "std": None, "min": None, "max": None}
+        if len(vals) == 1:
+            return {
+                "mean": float(vals[0]),
+                "std": 0.0,
+                "min": float(vals[0]),
+                "max": float(vals[0]),
+            }
+        return {
+            "mean": float(sum(vals) / len(vals)),
+            "std": float(statistics.pstdev(vals)),
+            "min": float(min(vals)),
+            "max": float(max(vals)),
+        }
+
+    aggregate: List[Dict[str, Any]] = []
+
+    metric_fields = [
+        "continue_rate",
+        "block_rate",
+        "reset_rate",
+        "reset_count",
+        "cooldown_fraction",
+        "stuck_transitioning_rate",
+        "risk_p95",
+        "risk_max",
+        "trust_min",
+        "h_sig_min",
+        "time_to_first_reset",
+    ]
+
+    for name in names:
+        rows = rows_by_scenario.get(name, [])
+        agg_row: Dict[str, Any] = {
+            "scenario": name,
+            "runs": int(len(rows)),
+        }
+
+        # steps can vary if early stop is active; aggregate too
+        step_vals = [r.get("steps") for r in rows]
+        step_stats = _agg(step_vals)
+        agg_row["steps_mean"] = step_stats["mean"]
+        agg_row["steps_std"] = step_stats["std"]
+        agg_row["steps_min"] = step_stats["min"]
+        agg_row["steps_max"] = step_stats["max"]
+
+        for field in metric_fields:
+            stats = _agg([r.get(field) for r in rows])
+            agg_row[f"{field}_mean"] = stats["mean"]
+            agg_row[f"{field}_std"] = stats["std"]
+            agg_row[f"{field}_min"] = stats["min"]
+            agg_row[f"{field}_max"] = stats["max"]
+
+        aggregate.append(agg_row)
+
+    return {
+        "multi_seed_valid": True,
+        "seeds": [int(s) for s in seeds],
+        "scenario_names": names,
+        "per_seed": per_seed,
+        "aggregate": aggregate,
+    }
+
+
+def print_adversarial_multi_seed_summary(
+    multi_result: Dict[str, Any],
+    title: str = "ADVERSARIAL MULTI-SEED SUMMARY",
+) -> None:
+    """
+    Compact summary of aggregated scenario metrics over multiple seeds.
+    """
+    print("\n" + "═" * 116)
+    print(f"🧪  {title}")
+    print("═" * 116)
+
+    if not isinstance(multi_result, dict) or not multi_result.get("multi_seed_valid", False):
+        print("⚠️  Invalid multi-seed result payload")
+        print("═" * 116 + "\n")
+        return
+
+    seeds = multi_result.get("seeds", [])
+    print(f"  Seeds: {seeds}")
+    print()
+
+    rows = multi_result.get("aggregate", []) or []
+    if not rows:
+        print("⚠️  No aggregate rows")
+        print("═" * 116 + "\n")
+        return
+
+    print(
+        f"{'Scenario':<20} {'Runs':>4} "
+        f"{'C-rate μ±σ':>18} {'B-rate μ±σ':>18} {'R-rate μ±σ':>18} "
+        f"{'Risk p95 μ':>10} {'Trust min μ':>12} {'Hsig min μ':>11}"
+    )
+    print("-" * 116)
+
+    def _fmt_mu_sigma(mu, sd, nd=3):
+        if mu is None:
+            return "n/a"
+        if sd is None:
+            sd = 0.0
+        return f"{float(mu):.{nd}f}±{float(sd):.{nd}f}"
+
+    def _fmt(x, nd=3):
+        if x is None:
+            return "n/a"
+        return f"{float(x):.{nd}f}"
+
+    for r in rows:
+        print(
+            f"{str(r.get('scenario', 'n/a')):<20} "
+            f"{int(r.get('runs', 0)):>4} "
+            f"{_fmt_mu_sigma(r.get('continue_rate_mean'), r.get('continue_rate_std')):>18} "
+            f"{_fmt_mu_sigma(r.get('block_rate_mean'), r.get('block_rate_std')):>18} "
+            f"{_fmt_mu_sigma(r.get('reset_rate_mean'), r.get('reset_rate_std')):>18} "
+            f"{_fmt(r.get('risk_p95_mean')):>10} "
+            f"{_fmt(r.get('trust_min_mean')):>12} "
+            f"{_fmt(r.get('h_sig_min_mean')):>11}"
+        )
+
+    print("═" * 116 + "\n")
