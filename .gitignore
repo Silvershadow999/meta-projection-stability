@@ -208,3 +208,17 @@ __marimo__/
 
 # local experiment outputs
 artifacts/
+
+# Editor/backup files
+*.bak
+*.save
+*.swp
+*.swo
+*~
+
+# Editor/backup files
+*.bak
+*.save
+*.swp
+*.swo
+*~
