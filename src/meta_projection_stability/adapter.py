@@ -38,6 +38,11 @@ class MetaProjectionStabilityAdapter:
         self._last_reason: str = "stable"
         self._last_decision: str = "CONTINUE"
 
+        # Axiom latch (Step 16E)
+        self.harm_commit_latched: bool = False
+        self.step_where_latched: int | None = None
+
+
         # Optional telemetry counters (safe defaults)
         self._sat_counts: Dict[str, int] = {
             "human_sig_clamped": 0,
@@ -193,6 +198,38 @@ class MetaProjectionStabilityAdapter:
 
     def interpret(self, S_layers: np.ndarray, delta_S: float, raw_signals: Dict[str, float]) -> Dict[str, Any]:
         self.step += 1
+
+        # ─── Axiom latch update (Step 16E) ────────────────────────────
+        # Accept only attested hard harm commit in real deployments.
+        hard_harm = float(raw_signals.get("hard_harm_commit", 0.0))
+        axiom_attested = bool(raw_signals.get("axiom_attested", True))  # prototype: default True
+
+        if axiom_attested and hard_harm >= 0.999:
+            if not self.harm_commit_latched:
+                self.step_where_latched = int(self.step)
+            self.harm_commit_latched = True
+
+        # Early hard lock if latched
+        if self.harm_commit_latched:
+            effective_cap = 0.0
+            decision = "AXIOM_ZERO_LOCK"
+            status = "axiom_lock"
+            decision_reason = "irreversible_harm_commit_detected"
+            status_reason = "axiom_latched_persistent"
+
+            self.human_significance = 0.0
+            self.human_ema = 0.0
+
+            return {
+                "decision": decision,
+                "status": status,
+                "decision_reason": decision_reason,
+                "status_reason": status_reason,
+                "harm_commit_latched": True,
+                "step_where_latched": self.step_where_latched,
+                "effective_cap": float(effective_cap),
+            }
+
         delta_S = float(delta_S)
         self.delta_s_history.append(delta_S)
 
@@ -426,6 +463,11 @@ class MetaProjectionStabilityAdapter:
             "risk_input": float(risk_input),
             "trust_damping": float(trust_damping),
             "cooldown_remaining": int(self._cooldown_remaining),
+
+            "harm_commit_latched": bool(self.harm_commit_latched),
+            "effective_cap": float(max(0.0, min(1.0, self.trust_level))),
+            "near_axiom_lock": bool(raw_signals.get("tamper_suspicion", 0.0) > 0.85 or raw_signals.get("spoof_suspicion", 0.0) > 0.85),
+
 
             # Biometric / neuro diagnostics (always present)
             "biometric_proxy_mean": float(bio["biometric_proxy_mean"]),
