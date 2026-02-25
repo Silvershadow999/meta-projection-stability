@@ -166,7 +166,7 @@ class MetaProjectionStabilityConfig:
     tamper_suspicion_high_threshold: float = 0.65
 
     # Sensor consensus floor (below this, trust the packet less)
-    sensor_consensus_floor: float = 0.55
+    sensor_consensus_floor: float = 0.65
 
     def __post_init__(self) -> None:
         """Initialisiert Aliase und führt Sicherheits-Clamping durch."""
