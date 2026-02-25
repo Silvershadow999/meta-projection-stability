@@ -37,6 +37,15 @@ __all__ = [
     "print_top_rankings",
     "save_ranked_rows_csv",
     "save_aggregate_ranking_csv",
+    "ParetoObjective",
+    "default_pareto_objectives",
+    "parse_pareto_objectives",
+    "pareto_front",
+    "pareto_from_ranked_rows",
+    "pareto_group_summary",
+    "print_pareto_front",
+    "save_pareto_front_csv",
+    "save_pareto_group_summary_csv",
 ]
 
 
@@ -67,4 +76,17 @@ from .ranking import (
     print_top_rankings,
     save_ranked_rows_csv,
     save_aggregate_ranking_csv,
+)
+
+
+from .pareto import (
+    ParetoObjective,
+    default_pareto_objectives,
+    parse_pareto_objectives,
+    pareto_front,
+    pareto_from_ranked_rows,
+    pareto_group_summary,
+    print_pareto_front,
+    save_pareto_front_csv,
+    save_pareto_group_summary_csv,
 )

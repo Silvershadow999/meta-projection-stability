@@ -22,6 +22,14 @@ from .ranking import (
     save_ranked_rows_csv,
     save_aggregate_ranking_csv,
 )
+from .pareto import (
+    parse_pareto_objectives,
+    pareto_from_ranked_rows,
+    pareto_group_summary,
+    print_pareto_front,
+    save_pareto_front_csv,
+    save_pareto_group_summary_csv,
+)
 from .profiles import list_profiles, describe_profiles, apply_profile
 
 
@@ -131,6 +139,34 @@ def _parse_args() -> argparse.Namespace:
         "--rank-export",
         action="store_true",
         help="Export ranking CSVs (ranked rows + aggregate groups)",
+    )
+    p.add_argument(
+        "--pareto",
+        action="store_true",
+        help="Compute Pareto front over ranked rows (trade-off view)",
+    )
+    p.add_argument(
+        "--pareto-metrics",
+        nargs="*",
+        default=None,
+        help="Pareto objectives as key:direction[:weight], e.g. continue_rate:max reset_rate:min risk_p95:min h_sig_min:max trust_min:max",
+    )
+    p.add_argument(
+        "--pareto-group-by",
+        nargs="*",
+        default=None,
+        help="Group keys for Pareto front summary (default: profile system scenario)",
+    )
+    p.add_argument(
+        "--pareto-top",
+        type=int,
+        default=20,
+        help="Top N Pareto rows/groups to print (default: 20)",
+    )
+    p.add_argument(
+        "--pareto-export",
+        action="store_true",
+        help="Export Pareto front CSVs (front rows + group summary)",
     )
     p.add_argument(
         "--rank-preset",
@@ -273,6 +309,9 @@ def main() -> None:
 
     result = run_experiment_batch(batch_cfg=batch_cfg, cfg=cfg)
 
+    ranked = None
+    agg_rank = None
+
     if not args.no_summary:
         print_experiment_batch_summary(result, title="CLI EXPERIMENT BATCH")
 
@@ -325,6 +364,52 @@ def main() -> None:
 
             print(f"Ranking CSV saved: {ranked_csv}")
             print(f"Group   CSV saved: {grouped_csv}")
+
+
+    # -------------------------
+    # Optional Pareto layer
+    # -------------------------
+    if args.pareto:
+        # Ensure ranked rows exist (Pareto is easier/cleaner on ranked rows incl. score_raw)
+        if ranked is None:
+            rank_weights = _make_rank_weights_from_preset(args.rank_preset)
+            ranked = rank_batch_rows(result, weights=rank_weights)
+
+        try:
+            objectives = parse_pareto_objectives(args.pareto_metrics or [])
+        except Exception as e:
+            raise SystemExit(f"Invalid --pareto-metrics: {e}")
+
+        pareto_res = pareto_from_ranked_rows(ranked, objectives=objectives)
+
+        pg_keys = args.pareto_group_by or ["profile", "system", "scenario"]
+        pg_keys = [g for g in pg_keys if isinstance(g, str) and g.strip()]
+        if not pg_keys:
+            pg_keys = ["profile", "system", "scenario"]
+
+        pareto_groups = pareto_group_summary(pareto_res, group_keys=tuple(pg_keys))
+
+        print_pareto_front(
+            pareto_res,
+            pareto_groups,
+            top_n_front=max(1, int(args.pareto_top)),
+            top_n_groups=max(1, int(args.pareto_top)),
+            title="CLI PARETO FRONTIER",
+        )
+
+        if args.pareto_export:
+            ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+            outdir = Path(args.outdir)
+            outdir.mkdir(parents=True, exist_ok=True)
+
+            front_csv = outdir / f"{args.prefix}_{ts}_pareto_front.csv"
+            group_csv = outdir / f"{args.prefix}_{ts}_pareto_groups.csv"
+
+            save_pareto_front_csv(pareto_res, str(front_csv))
+            save_pareto_group_summary_csv(pareto_groups, str(group_csv))
+
+            print(f"Pareto front CSV saved:  {front_csv}")
+            print(f"Pareto group CSV saved:  {group_csv}")
 
     if args.export:
         ts = datetime.now().strftime("%Y%m%d_%H%M%S")
