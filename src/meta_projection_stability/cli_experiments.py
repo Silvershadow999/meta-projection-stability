@@ -14,6 +14,7 @@ from .experiment_runner import (
     save_experiment_batch_csv,
 )
 from .adversarial_sim import get_default_adversarial_scenarios
+from .profiles import list_profiles, describe_profiles, apply_profile
 
 
 def _parse_args() -> argparse.Namespace:
@@ -50,6 +51,18 @@ def _parse_args() -> argparse.Namespace:
         default=None,
         help="Override scenario steps for all runs (recommended for quick tests)",
     )
+    p.add_argument(
+        "--profile",
+        type=str,
+        default="balanced",
+        help="Config profile for main adapter runs (and shared cfg defaults): balanced | protective | aggressive_recovery | strict_safety",
+    )
+    p.add_argument(
+        "--list-profiles",
+        action="store_true",
+        help="List available config profiles and exit",
+    )
+
     p.add_argument(
         "--debug",
         action="store_true",
@@ -108,6 +121,13 @@ def _validate_scenarios(selected: Optional[List[str]]) -> List[str]:
 def main() -> None:
     args = _parse_args()
 
+    if args.list_profiles:
+        desc = describe_profiles()
+        print("Available profiles:")
+        for name in list_profiles():
+            print(f" - {name}: {desc.get(name, '')}")
+        return
+
     scenarios = _validate_scenarios(args.scenarios)
     seeds = args.seeds
     systems = args.systems
@@ -131,6 +151,8 @@ def main() -> None:
         verbose=False,
     )
 
+    apply_profile(cfg, profile_name=args.profile)
+
     batch_cfg = ExperimentBatchConfig(
         scenario_names=scenarios,
         seeds=seeds,
@@ -147,6 +169,7 @@ def main() -> None:
     rows = result.get("rows", []) if isinstance(result, dict) else []
     errs = result.get("run_errors", []) if isinstance(result, dict) else []
 
+    print(f"Profile: {args.profile}")
     print(f"Completed runs: {len(rows)}")
     print(f"Errors: {len(errs)}")
 

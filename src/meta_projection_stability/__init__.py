@@ -24,6 +24,12 @@ __all__ = [
     "print_experiment_batch_summary",
     "save_experiment_batch_json",
     "save_experiment_batch_csv",
+    "ProfileSpec",
+    "get_profile_specs",
+    "list_profiles",
+    "describe_profiles",
+    "apply_profile",
+    "make_profile_config",
 ]
 
 
@@ -33,4 +39,14 @@ from .experiment_runner import (
     print_experiment_batch_summary,
     save_experiment_batch_json,
     save_experiment_batch_csv,
+)
+
+
+from .profiles import (
+    ProfileSpec,
+    get_profile_specs,
+    list_profiles,
+    describe_profiles,
+    apply_profile,
+    make_profile_config,
 )
