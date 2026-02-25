@@ -143,6 +143,31 @@ class MetaProjectionStabilityConfig:
     # Optionales Metadaten-Feld (nicht zwingend genutzt, aber praktisch)
     tags: List[str] = field(default_factory=list)
 
+
+    # ─── Signal Guard / Consistency Checks (Step 16B) ────────────────
+    enable_signal_guard: bool = True
+
+    # Additive penalty on policy_risk when sensor fusion looks suspicious
+    signal_guard_penalty_weight: float = 0.18
+    consistency_penalty_weight: float = 0.22
+
+    # Threshold at which a signal packet is considered suspicious
+    suspicious_signal_threshold: float = 0.35
+
+    # Simple cross-signal consistency heuristics (0..1 normalized space)
+    # Example suspicious pattern: "high HRV" + "high EDA" + "low valence"
+    hrv_high_threshold: float = 0.80
+    eda_high_threshold: float = 0.75
+    valence_low_threshold: float = 0.30
+
+    # Autonomy / dependency / tamper combinations
+    autonomy_low_threshold: float = 0.30
+    dependency_high_threshold: float = 0.70
+    tamper_suspicion_high_threshold: float = 0.65
+
+    # Sensor consensus floor (below this, trust the packet less)
+    sensor_consensus_floor: float = 0.55
+
     def __post_init__(self) -> None:
         """Initialisiert Aliase und führt Sicherheits-Clamping durch."""
         self._clamp_and_normalize()
