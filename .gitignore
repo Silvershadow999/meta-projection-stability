@@ -222,3 +222,10 @@ artifacts/
 *.swp
 *.swo
 *~
+
+# Editor/backup files
+*.bak
+*.save
+*.swp
+*.swo
+*~
