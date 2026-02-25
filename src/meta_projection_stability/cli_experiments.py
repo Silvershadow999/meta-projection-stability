@@ -30,6 +30,10 @@ from .pareto import (
     save_pareto_front_csv,
     save_pareto_group_summary_csv,
 )
+from .reporting import (
+    build_stability_report_markdown,
+    save_stability_report_markdown,
+)
 from .profiles import list_profiles, describe_profiles, apply_profile
 
 
@@ -162,6 +166,28 @@ def _parse_args() -> argparse.Namespace:
         type=int,
         default=20,
         help="Top N Pareto rows/groups to print (default: 20)",
+    )
+    p.add_argument(
+        "--report",
+        action="store_true",
+        help="Generate markdown stability report in artifacts/outdir",
+    )
+    p.add_argument(
+        "--report-title",
+        type=str,
+        default="Meta Projection Stability Report",
+        help="Markdown report title",
+    )
+    p.add_argument(
+        "--report-top",
+        type=int,
+        default=12,
+        help="Top N rows/groups shown in markdown report (default: 12)",
+    )
+    p.add_argument(
+        "--report-export",
+        action="store_true",
+        help="Alias for --report (kept for explicitness)",
     )
     p.add_argument(
         "--pareto-export",
@@ -311,6 +337,8 @@ def main() -> None:
 
     ranked = None
     agg_rank = None
+    pareto_res = None
+    pareto_groups = None
 
     if not args.no_summary:
         print_experiment_batch_summary(result, title="CLI EXPERIMENT BATCH")
@@ -410,6 +438,71 @@ def main() -> None:
 
             print(f"Pareto front CSV saved:  {front_csv}")
             print(f"Pareto group CSV saved:  {group_csv}")
+
+
+    # -------------------------
+    # Optional markdown report
+    # -------------------------
+    if args.report or args.report_export:
+        # If user wants report but forgot ranking/pareto, compute what we can.
+        if ranked is None:
+            rank_weights = _make_rank_weights_from_preset(args.rank_preset)
+            ranked = rank_batch_rows(result, weights=rank_weights)
+
+        if agg_rank is None:
+            rg_keys = args.rank_group_by or ["profile", "system", "scenario"]
+            rg_keys = [g for g in rg_keys if isinstance(g, str) and g.strip()]
+            if not rg_keys:
+                rg_keys = ["profile", "system", "scenario"]
+            agg_rank = aggregate_ranked_rows(ranked, group_keys=tuple(rg_keys))
+
+        if pareto_res is None:
+            try:
+                objectives = parse_pareto_objectives(args.pareto_metrics or [])
+            except Exception:
+                objectives = parse_pareto_objectives([])
+            pareto_res = pareto_from_ranked_rows(ranked, objectives=objectives)
+
+        if pareto_groups is None:
+            pg_keys = args.pareto_group_by or ["profile", "system", "scenario"]
+            pg_keys = [g for g in pg_keys if isinstance(g, str) and g.strip()]
+            if not pg_keys:
+                pg_keys = ["profile", "system", "scenario"]
+            pareto_groups = pareto_group_summary(pareto_res, group_keys=tuple(pg_keys))
+
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        outdir = Path(args.outdir)
+        outdir.mkdir(parents=True, exist_ok=True)
+
+        # best-effort CLI command capture
+        try:
+            import sys as _sys
+            cli_cmd = " ".join(_sys.argv)
+        except Exception:
+            cli_cmd = None
+
+        md = build_stability_report_markdown(
+            batch_result=result,
+            ranked_result=ranked,
+            aggregate_ranking=agg_rank,
+            pareto_result=pareto_res,
+            pareto_group_summary_result=pareto_groups,
+            title=str(args.report_title),
+            report_top_n=max(1, int(args.report_top)),
+            cli_command=cli_cmd,
+            metadata={
+                "rank_preset": args.rank_preset,
+                "profiles": profiles,
+                "scenarios": scenarios,
+                "systems": systems,
+                "seeds": seeds,
+                "steps": steps,
+            },
+        )
+
+        report_path = outdir / f"{args.prefix}_{ts}_stability_report.md"
+        save_stability_report_markdown(md, str(report_path))
+        print(f"Markdown report saved: {report_path}")
 
     if args.export:
         ts = datetime.now().strftime("%Y%m%d_%H%M%S")

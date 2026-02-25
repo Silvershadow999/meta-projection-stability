@@ -46,6 +46,8 @@ __all__ = [
     "print_pareto_front",
     "save_pareto_front_csv",
     "save_pareto_group_summary_csv",
+    "build_stability_report_markdown",
+    "save_stability_report_markdown",
 ]
 
 
@@ -89,4 +91,10 @@ from .pareto import (
     print_pareto_front,
     save_pareto_front_csv,
     save_pareto_group_summary_csv,
+)
+
+
+from .reporting import (
+    build_stability_report_markdown,
+    save_stability_report_markdown,
 )
