@@ -98,3 +98,6 @@ from .reporting import (
     build_stability_report_markdown,
     save_stability_report_markdown,
 )
+
+# adversarial
+from .adversarial import run_adversarial_scenario, run_all_scenarios
