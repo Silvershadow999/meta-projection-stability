@@ -382,6 +382,7 @@ class MetaProjectionStabilityAdapter:
             "sensor_consensus": float(bio["sensor_consensus"]),
             "tamper_suspicion": float(bio["tamper_suspicion"]),
             "dependency_risk": float(bio["dependency_risk"]),
+            "biometric_risk_component": float(bio["dependency_risk"]),
             "autonomy_proxy": float(bio["autonomy_proxy"]),
             "gamma_coherence_proxy": float(bio["gamma_coherence_proxy"]),
             "eda_stress_score": float(bio["eda_stress"]),
@@ -391,8 +392,10 @@ class MetaProjectionStabilityAdapter:
 
             # Bonus / penalties
             "mutual_bonus": float(mutual_bonus),
+            "mutuality_bonus": float(mutual_bonus),
             "base_decay": float(base_decay),
             "recovery_bonus": float(recovery_bonus),
+            "trust_reinforcement": float(recovery_bonus),
 
             # Telemetry snapshots
             "sat_counts": dict(self._sat_counts),
