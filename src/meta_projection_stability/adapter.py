@@ -73,6 +73,16 @@ class MetaProjectionStabilityAdapter:
         def _clip01(x: float) -> float:
             return float(np.clip(float(x), 0.0, 1.0))
 
+        # Accept compact channel list input (Step 16B): raw_signals["biometric_channels"] = [..]
+        # This makes tests and simulators simpler.
+        core_values = []
+        if "biometric_channels" in raw_signals:
+            try:
+                for v in raw_signals.get("biometric_channels") or []:
+                    core_values.append(_clip01(v))
+            except Exception:
+                core_values = []
+
         # Defaults chosen as neutral-positive (non-punitive baseline)
         out = {
             "biometric_proxy_mean": 0.75,
@@ -81,6 +91,49 @@ class MetaProjectionStabilityAdapter:
             "critical_channel_penalty": 0.0,
             "critical_channel_min": 0.75,
         }
+
+
+        # EARLY PATH: biometric_channels
+        # If caller provides a compact channel list, compute proxy/consensus/min directly and return.
+        if "biometric_channels" in raw_signals:
+            try:
+                ch = raw_signals.get("biometric_channels") or []
+                core_values = [ _clip01(v) for v in ch ]
+            except Exception:
+                core_values = []
+
+            if core_values:
+                robust_core_mean = float(np.mean(core_values))
+                biometric_proxy_mean = float(np.clip(robust_core_mean, 0.0, 1.0))
+
+                # Consensus from spread: higher spread -> lower consensus
+                if len(core_values) >= 2:
+                    sensor_consensus = float(np.clip(1.0 - float(np.std(core_values)), 0.0, 1.0))
+                else:
+                    sensor_consensus = 0.75
+
+                critical_min = float(min(core_values))
+
+                # Apply overrides if explicitly given
+                if "sensor_consensus" in raw_signals:
+                    sensor_consensus = float(np.clip(raw_signals.get("sensor_consensus", sensor_consensus), 0.0, 1.0))
+                if "biometric_proxy_mean" in raw_signals:
+                    biometric_proxy_mean = float(np.clip(raw_signals.get("biometric_proxy_mean", biometric_proxy_mean), 0.0, 1.0))
+
+                biometric_proxy_pre_penalty = biometric_proxy_mean
+                if "biometric_proxy" in raw_signals:
+                    biometric_proxy_pre_penalty = float(np.clip(raw_signals.get("biometric_proxy", biometric_proxy_pre_penalty), 0.0, 1.0))
+
+                # Soft penalty: if minimum channel collapses, penalize final proxy (bounded)
+                critical_channel_penalty = float(max(0.0, min(0.35, 0.35 - critical_min)))
+                biometric_proxy = float(max(0.0, min(1.0, biometric_proxy_pre_penalty - 0.6 * critical_channel_penalty)))
+
+                out["biometric_proxy_mean"] = float(biometric_proxy_mean)
+                out["biometric_proxy"] = float(biometric_proxy)
+                out["sensor_consensus"] = float(sensor_consensus)
+                out["critical_channel_min"] = float(critical_min)
+                out["critical_channel_penalty"] = float(critical_channel_penalty)
+                return out
 
         # Direct overrides (if caller already computed aggregates)
         if "biometric_proxy" in raw_signals:
