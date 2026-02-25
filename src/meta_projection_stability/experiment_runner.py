@@ -16,6 +16,7 @@ from .baseline_sim import (
 )
 from .analytics import compute_stability_metrics
 from .adversarial_sim import get_default_adversarial_scenarios
+from .profiles import list_profiles as list_config_profiles, apply_profile
 
 
 @dataclass
@@ -23,6 +24,7 @@ class ExperimentBatchConfig:
     scenario_names: Optional[List[str]] = None
     seeds: Optional[List[int]] = None
     systems: Optional[List[str]] = None  # ["main_adapter", "threshold_only", "ema_risk_only"]
+    profiles: Optional[List[str]] = None  # e.g. ["balanced", "protective"]
     steps_override: Optional[int] = None
     debug: bool = False
 
@@ -36,6 +38,10 @@ def _default_systems() -> List[str]:
 
 def _default_seeds() -> List[int]:
     return [41, 42, 43]
+
+
+def _default_profiles() -> List[str]:
+    return ["balanced"]
 
 
 def _extract_scenario_run_kwargs(
@@ -89,6 +95,7 @@ def _flatten_row(
     system_name: str,
     scenario_name: str,
     seed: int,
+    profile_name: str,
     result: Dict[str, Any],
 ) -> Dict[str, Any]:
     m = result.get("metrics_analytics")
@@ -101,6 +108,7 @@ def _flatten_row(
 
     row = {
         "system": system_name,
+        "profile": profile_name,
         "scenario": scenario_name,
         "seed": int(seed),
         "valid": bool(m.get("valid", False)) if isinstance(m, dict) else False,
@@ -204,6 +212,7 @@ def run_experiment_batch(
     """
     batch_cfg = batch_cfg or ExperimentBatchConfig()
     systems = batch_cfg.systems or _default_systems()
+    profiles = batch_cfg.profiles or _default_profiles()
     seeds = batch_cfg.seeds or _default_seeds()
     scenarios_map = get_default_adversarial_scenarios()
     scenario_names = batch_cfg.scenario_names or list(scenarios_map.keys())
@@ -211,41 +220,56 @@ def run_experiment_batch(
     rows: List[Dict[str, Any]] = []
     run_errors: List[Dict[str, Any]] = []
 
-    for scenario_name in scenario_names:
-        for seed in seeds:
-            # fresh config per run to reduce accidental state leakage
-            cfg_run = cfg or MetaProjectionStabilityConfig(seed=int(seed), enable_plot=False, debug=batch_cfg.debug, verbose=False)
-            if cfg is not None:
-                # best effort shallow reset-ish values
-                try:
-                    cfg_run.seed = int(seed)
-                except Exception:
-                    pass
-                try:
-                    cfg_run.debug = bool(batch_cfg.debug)
-                except Exception:
-                    pass
+    for profile_name in profiles:
+        for scenario_name in scenario_names:
+            for seed in seeds:
+                # fresh config per run to reduce accidental state leakage
+                cfg_run = cfg or MetaProjectionStabilityConfig(seed=int(seed), enable_plot=False, debug=batch_cfg.debug, verbose=False)
+                if cfg is not None:
+                    # best effort shallow reset-ish values
+                    try:
+                        cfg_run.seed = int(seed)
+                    except Exception:
+                        pass
+                    try:
+                        cfg_run.debug = bool(batch_cfg.debug)
+                    except Exception:
+                        pass
 
-            run_kwargs = _extract_scenario_run_kwargs(
-                scenario_name=scenario_name,
-                seed=int(seed),
-                cfg=cfg_run,
-                steps_override=batch_cfg.steps_override,
-                debug=batch_cfg.debug,
-            )
-
-            for system_name in systems:
+                # Apply selected behavior profile to config (main adapter + shared defaults)
                 try:
-                    result = _run_system(system_name, run_kwargs)
-                    row = _flatten_row(system_name, scenario_name, int(seed), result)
-                    rows.append(row)
+                    apply_profile(cfg_run, profile_name=profile_name)
                 except Exception as e:
                     run_errors.append({
-                        "system": system_name,
+                        "system": "<profile-apply>",
+                        "profile": profile_name,
                         "scenario": scenario_name,
                         "seed": int(seed),
                         "error": repr(e),
                     })
+                    continue
+
+                run_kwargs = _extract_scenario_run_kwargs(
+                    scenario_name=scenario_name,
+                    seed=int(seed),
+                    cfg=cfg_run,
+                    steps_override=batch_cfg.steps_override,
+                    debug=batch_cfg.debug,
+                )
+
+                for system_name in systems:
+                    try:
+                        result = _run_system(system_name, run_kwargs)
+                        row = _flatten_row(system_name, scenario_name, int(seed), profile_name, result)
+                        rows.append(row)
+                    except Exception as e:
+                        run_errors.append({
+                            "system": system_name,
+                            "profile": profile_name,
+                            "scenario": scenario_name,
+                            "seed": int(seed),
+                            "error": repr(e),
+                        })
 
     metric_keys = [
         "continue_rate",
@@ -262,6 +286,22 @@ def run_experiment_batch(
         "h_sig_mean",
         "time_to_first_reset",
     ]
+
+    agg_by_profile_system_scenario = _group_mean_std(
+        rows=rows,
+        group_keys=["profile", "system", "scenario"],
+        metric_keys=metric_keys,
+    )
+    agg_by_profile_system = _group_mean_std(
+        rows=rows,
+        group_keys=["profile", "system"],
+        metric_keys=metric_keys,
+    )
+    agg_by_profile = _group_mean_std(
+        rows=rows,
+        group_keys=["profile"],
+        metric_keys=metric_keys,
+    )
 
     agg_by_system_scenario = _group_mean_std(
         rows=rows,
@@ -286,6 +326,9 @@ def run_experiment_batch(
         "rows": rows,
         "run_errors": run_errors,
         "aggregates": {
+            "by_profile_system_scenario": agg_by_profile_system_scenario,
+            "by_profile_system": agg_by_profile_system,
+            "by_profile": agg_by_profile,
             "by_system_scenario": agg_by_system_scenario,
             "by_system": agg_by_system,
             "by_scenario": agg_by_scenario,
@@ -340,7 +383,9 @@ def print_experiment_batch_summary(batch_result: Dict[str, Any], title: str = "E
     if errs:
         print("  First error:", errs[0])
 
-    agg = (((batch_result.get("aggregates") or {}).get("by_system_scenario")) or [])
+    agg = (((batch_result.get("aggregates") or {}).get("by_profile_system_scenario")) or [])
+    if not agg:
+        agg = (((batch_result.get("aggregates") or {}).get("by_system_scenario")) or [])
     if not agg:
         print("⚠️  No aggregate rows")
         print("═" * 120 + "\n")
@@ -348,7 +393,7 @@ def print_experiment_batch_summary(batch_result: Dict[str, Any], title: str = "E
 
     print()
     print(
-        f"{'System':<16} {'Scenario':<20} {'Runs':>4} "
+        f"{'Profile':<20} {'System':<16} {'Scenario':<20} {'Runs':>4} "
         f"{'C-rate μ±σ':>18} {'B-rate μ±σ':>18} {'R-rate μ±σ':>18} "
         f"{'Risk p95 μ':>10} {'Trust min μ':>12} {'Hsig min μ':>11}"
     )
@@ -371,6 +416,7 @@ def print_experiment_batch_summary(batch_result: Dict[str, Any], title: str = "E
 
     for r in agg:
         print(
+            f"{str(r.get('profile', 'n/a')):<20} "
             f"{str(r.get('system', 'n/a')):<16} "
             f"{str(r.get('scenario', 'n/a')):<20} "
             f"{int(r.get('runs', 0)):>4} "

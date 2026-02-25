@@ -32,6 +32,12 @@ def _parse_args() -> argparse.Namespace:
         help=f"Scenario names (default: all). Available: {', '.join(scenarios)}",
     )
     p.add_argument(
+        "--profiles",
+        nargs="*",
+        default=None,
+        help="Profile list for sweeps, e.g. --profiles balanced protective strict_safety",
+    )
+    p.add_argument(
         "--seeds",
         nargs="*",
         type=int,
@@ -118,6 +124,19 @@ def _validate_scenarios(selected: Optional[List[str]]) -> List[str]:
     return selected
 
 
+def _validate_profiles(selected: Optional[List[str]]) -> List[str]:
+    available = set(list_profiles())
+    if not selected:
+        return ["balanced"]
+
+    invalid = [p for p in selected if p not in available]
+    if invalid:
+        raise SystemExit(
+            f"Unknown profiles: {invalid}. Available: {sorted(available)}"
+        )
+    return selected
+
+
 def main() -> None:
     args = _parse_args()
 
@@ -129,6 +148,7 @@ def main() -> None:
         return
 
     scenarios = _validate_scenarios(args.scenarios)
+    profiles = _validate_profiles(args.profiles)
     seeds = args.seeds
     systems = args.systems
     steps = args.steps
@@ -141,6 +161,8 @@ def main() -> None:
             seeds = [41, 42]
         if systems is None:
             systems = ["main_adapter", "threshold_only", "ema_risk_only"]
+        if args.profiles is None:
+            profiles = ["balanced", "protective"]
         if steps is None:
             steps = 500
 
@@ -157,6 +179,7 @@ def main() -> None:
         scenario_names=scenarios,
         seeds=seeds,
         systems=systems,
+        profiles=profiles,
         steps_override=steps,
         debug=bool(args.debug),
     )
@@ -170,6 +193,7 @@ def main() -> None:
     errs = result.get("run_errors", []) if isinstance(result, dict) else []
 
     print(f"Profile: {args.profile}")
+    print(f"Profiles: {profiles}")
     print(f"Completed runs: {len(rows)}")
     print(f"Errors: {len(errs)}")
 
