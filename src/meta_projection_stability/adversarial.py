@@ -163,6 +163,25 @@ def run_adversarial_scenario(
 
         out = a.interpret(S_layers=S_layers, delta_S=delta_S, raw_signals=raw)
 
+
+        # Axiom hard-lock detection
+        if out.get("decision") == "AXIOM_ZERO_LOCK":
+            history["decision"].append(out.get("decision"))
+            history["status"].append(out.get("status"))
+            history["mutual_bonus"].append(out.get("mutual_bonus", 0.0))
+            history["mutual_ema"].append(out.get("mutual_ema", 0.0))
+
+            # fill numeric channels with None (keeps aligned length)
+            history["instability_signal"].append(raw.get("instability_signal"))
+            history["biometric_channels"].append(list(raw.get("biometric_channels", [])))
+            for k in ("sensor_consensus","biometric_proxy","critical_channel_penalty","consensus_penalty","bio_penalty",
+                      "base_decay_effective","instability_risk","trust_level","human_sig","h_ema"):
+                history[k].append(out.get(k))
+
+            # store lock marker and stop
+            history.setdefault("axiom_locked_at_step", []).append(int(t))
+            break
+
         # log
         history["instability_signal"].append(raw["instability_signal"])
         history["biometric_channels"].append(list(raw["biometric_channels"]))
@@ -196,6 +215,11 @@ def run_adversarial_scenario(
 
     metrics = {
         "steps": steps,
+
+        "steps_executed": len(decisions),
+        "axiom_locked": any(d == "AXIOM_ZERO_LOCK" for d in decisions),
+        "locked_at_step": next((i for i,d in enumerate(decisions) if d == "AXIOM_ZERO_LOCK"), None),
+
         "blocked_steps": blocked,
         "blocked_share": blocked / max(1, steps),
         "continue_steps": continue_count,
