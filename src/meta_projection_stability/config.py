@@ -94,6 +94,26 @@ class MetaProjectionStabilityConfig:
     ema_alpha_human: float = 0.09
     human_sig_max: float = 1.10
 
+    # ─── Adapter dynamics (required by adapter.py) ────────────────────
+    human_decay_scale: float = 0.10
+    recovery_trust_power: float = 1.00
+    transition_decay_factor: float = 0.65
+    cooldown_human_recovery_step: float = 0.02
+
+    # ─── Biometric fusion / Mutuality (Phase A/B) ─────────────────────
+    use_biometric_fusion: bool = True
+    biometric_proxy_weight: float = 0.35
+    biometric_risk_weight: float = 0.25
+    autonomy_decay_weight: float = 0.06
+    mutuality_bonus_gain: float = 0.02
+    mutuality_autonomy_floor: float = 0.35
+
+    # ─── Adapter dynamics (required by adapter.py) ──────────────────────
+    human_decay_scale: float = 0.10
+    recovery_trust_power: float = 1.0
+    transition_decay_factor: float = 0.65
+    cooldown_human_recovery_step: float = 0.02
+
     # ─── Debugging & Kompatibilität ────────────────────────────────────
     verbose: bool = False
     debug: bool = False
