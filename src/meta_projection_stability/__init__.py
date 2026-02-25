@@ -30,6 +30,13 @@ __all__ = [
     "describe_profiles",
     "apply_profile",
     "make_profile_config",
+    "ScoreWeights",
+    "score_row",
+    "rank_batch_rows",
+    "aggregate_ranked_rows",
+    "print_top_rankings",
+    "save_ranked_rows_csv",
+    "save_aggregate_ranking_csv",
 ]
 
 
@@ -49,4 +56,15 @@ from .profiles import (
     describe_profiles,
     apply_profile,
     make_profile_config,
+)
+
+
+from .ranking import (
+    ScoreWeights,
+    score_row,
+    rank_batch_rows,
+    aggregate_ranked_rows,
+    print_top_rankings,
+    save_ranked_rows_csv,
+    save_aggregate_ranking_csv,
 )
