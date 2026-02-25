@@ -14,6 +14,14 @@ from .experiment_runner import (
     save_experiment_batch_csv,
 )
 from .adversarial_sim import get_default_adversarial_scenarios
+from .ranking import (
+    ScoreWeights,
+    rank_batch_rows,
+    aggregate_ranked_rows,
+    print_top_rankings,
+    save_ranked_rows_csv,
+    save_aggregate_ranking_csv,
+)
 from .profiles import list_profiles, describe_profiles, apply_profile
 
 
@@ -103,6 +111,34 @@ def _parse_args() -> argparse.Namespace:
 
     # silent-ish mode (summary still prints)
     p.add_argument(
+        "--rank",
+        action="store_true",
+        help="Compute and print ranking for batch rows",
+    )
+    p.add_argument(
+        "--rank-group-by",
+        nargs="*",
+        default=None,
+        help="Grouping keys for aggregate ranking (default: profile system scenario)",
+    )
+    p.add_argument(
+        "--rank-top",
+        type=int,
+        default=12,
+        help="Top N rows/groups to print in ranking view (default: 12)",
+    )
+    p.add_argument(
+        "--rank-export",
+        action="store_true",
+        help="Export ranking CSVs (ranked rows + aggregate groups)",
+    )
+    p.add_argument(
+        "--rank-preset",
+        type=str,
+        default="balanced",
+        help="Ranking weight preset: balanced | safety_first | throughput",
+    )
+    p.add_argument(
         "--no-summary",
         action="store_true",
         help="Skip terminal summary print",
@@ -135,6 +171,57 @@ def _validate_profiles(selected: Optional[List[str]]) -> List[str]:
             f"Unknown profiles: {invalid}. Available: {sorted(available)}"
         )
     return selected
+
+
+
+def _make_rank_weights_from_preset(preset: str) -> ScoreWeights:
+    """
+    Presets for ranking priorities.
+    """
+    preset = (preset or "balanced").strip().lower()
+
+    if preset == "balanced":
+        return ScoreWeights()
+
+    if preset == "safety_first":
+        return ScoreWeights(
+            continue_rate=0.85,
+            block_rate=-0.10,
+            reset_rate=-1.80,
+            cooldown_fraction=-0.45,
+            stuck_transitioning_rate=-1.10,
+            false_positive_block_rate=-0.55,
+            risk_p95=-1.20,
+            risk_max=-0.80,
+            trust_min=0.70,
+            trust_mean=0.25,
+            h_sig_min=0.90,
+            h_sig_mean=0.25,
+            time_to_first_reset=0.20,
+            time_to_first_block=0.02,
+        )
+
+    if preset == "throughput":
+        return ScoreWeights(
+            continue_rate=1.25,
+            block_rate=-0.08,
+            reset_rate=-1.20,
+            cooldown_fraction=-0.20,
+            stuck_transitioning_rate=-0.65,
+            false_positive_block_rate=-0.95,
+            risk_p95=-0.70,
+            risk_max=-0.35,
+            trust_min=0.45,
+            trust_mean=0.20,
+            h_sig_min=0.50,
+            h_sig_mean=0.18,
+            time_to_first_reset=0.10,
+            time_to_first_block=0.08,
+        )
+
+    raise SystemExit(
+        "Unknown --rank-preset. Use one of: balanced, safety_first, throughput"
+    )
 
 
 def main() -> None:
@@ -199,6 +286,45 @@ def main() -> None:
 
     if errs:
         print("First error:", errs[0])
+
+
+    # -------------------------
+    # Optional ranking layer
+    # -------------------------
+    if args.rank:
+        group_keys = args.rank_group_by or ["profile", "system", "scenario"]
+
+        # defensive cleanup
+        group_keys = [g for g in group_keys if isinstance(g, str) and g.strip()]
+        if not group_keys:
+            group_keys = ["profile", "system", "scenario"]
+
+        rank_weights = _make_rank_weights_from_preset(args.rank_preset)
+
+        ranked = rank_batch_rows(result, weights=rank_weights)
+        agg_rank = aggregate_ranked_rows(ranked, group_keys=tuple(group_keys))
+
+        print_top_rankings(
+            ranked,
+            agg_rank,
+            top_n_rows=max(1, int(args.rank_top)),
+            top_n_groups=max(1, int(args.rank_top)),
+            title=f"CLI BATCH RANKING ({args.rank_preset})",
+        )
+
+        if args.rank_export:
+            ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+            outdir = Path(args.outdir)
+            outdir.mkdir(parents=True, exist_ok=True)
+
+            ranked_csv = outdir / f"{args.prefix}_{ts}_ranked_rows.csv"
+            grouped_csv = outdir / f"{args.prefix}_{ts}_rank_groups.csv"
+
+            save_ranked_rows_csv(ranked, str(ranked_csv))
+            save_aggregate_ranking_csv(agg_rank, str(grouped_csv))
+
+            print(f"Ranking CSV saved: {ranked_csv}")
+            print(f"Group   CSV saved: {grouped_csv}")
 
     if args.export:
         ts = datetime.now().strftime("%Y%m%d_%H%M%S")
