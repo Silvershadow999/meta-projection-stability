@@ -3,111 +3,66 @@ meta_projection_stability package exports
 """
 
 from .config import MetaProjectionStabilityConfig, get_default_config, print_config
+from .adapter import MetaProjectionStabilityAdapter
 from .simulation import run_simulation
+from .analytics import (
+    calculate_safety_score,
+    summarize_risk_profile,
+    print_risk_summary,
+    print_enhanced_summary,
+)
+from .level0_axiom import (
+    DecisionStatus,
+    ActionProposal,
+    Level0Thresholds,
+    Level0Decision,
+    Level0AxiomEngine,
+)
 
-# Plotting ist optional (damit Package-Import nicht crasht, wenn plotting API abweicht)
+# Optional plotting exports
 try:
     from .plotting import plot_results, print_summary
-except ImportError:
+except Exception:
     plot_results = None
     print_summary = None
+
+# Optional adversarial exports
+try:
+    from .adversarial import run_adversarial_scenario, run_all_scenarios
+except Exception:
+    run_adversarial_scenario = None
+    run_all_scenarios = None
+
+# Optional axiom handshake / gateway exports
+try:
+    from .axiom_handshake import AxiomHandshakeModule
+except Exception:
+    AxiomHandshakeModule = None
+
+try:
+    from .axiom_gateway import AxiomCompatibilityGateway
+except Exception:
+    AxiomCompatibilityGateway = None
 
 __all__ = [
     "MetaProjectionStabilityConfig",
     "get_default_config",
     "print_config",
+    "MetaProjectionStabilityAdapter",
     "run_simulation",
     "plot_results",
     "print_summary",
-    "ExperimentBatchConfig",
-    "run_experiment_batch",
-    "print_experiment_batch_summary",
-    "save_experiment_batch_json",
-    "save_experiment_batch_csv",
-    "ProfileSpec",
-    "get_profile_specs",
-    "list_profiles",
-    "describe_profiles",
-    "apply_profile",
-    "make_profile_config",
-    "ScoreWeights",
-    "score_row",
-    "rank_batch_rows",
-    "aggregate_ranked_rows",
-    "print_top_rankings",
-    "save_ranked_rows_csv",
-    "save_aggregate_ranking_csv",
-    "ParetoObjective",
-    "default_pareto_objectives",
-    "parse_pareto_objectives",
-    "pareto_front",
-    "pareto_from_ranked_rows",
-    "pareto_group_summary",
-    "print_pareto_front",
-    "save_pareto_front_csv",
-    "save_pareto_group_summary_csv",
-    "build_stability_report_markdown",
-    "save_stability_report_markdown",
+    "calculate_safety_score",
+    "summarize_risk_profile",
+    "print_risk_summary",
+    "print_enhanced_summary",
+    "DecisionStatus",
+    "ActionProposal",
+    "Level0Thresholds",
+    "Level0Decision",
+    "Level0AxiomEngine",
+    "run_adversarial_scenario",
+    "run_all_scenarios",
+    "AxiomHandshakeModule",
+    "AxiomCompatibilityGateway",
 ]
-
-
-from .experiment_runner import (
-    ExperimentBatchConfig,
-    run_experiment_batch,
-    print_experiment_batch_summary,
-    save_experiment_batch_json,
-    save_experiment_batch_csv,
-)
-
-
-from .profiles import (
-    ProfileSpec,
-    get_profile_specs,
-    list_profiles,
-    describe_profiles,
-    apply_profile,
-    make_profile_config,
-)
-
-
-from .ranking import (
-    ScoreWeights,
-    score_row,
-    rank_batch_rows,
-    aggregate_ranked_rows,
-    print_top_rankings,
-    save_ranked_rows_csv,
-    save_aggregate_ranking_csv,
-)
-
-
-from .pareto import (
-    ParetoObjective,
-    default_pareto_objectives,
-    parse_pareto_objectives,
-    pareto_front,
-    pareto_from_ranked_rows,
-    pareto_group_summary,
-    print_pareto_front,
-    save_pareto_front_csv,
-    save_pareto_group_summary_csv,
-)
-
-
-from .reporting import (
-    build_stability_report_markdown,
-    save_stability_report_markdown,
-)
-
-# adversarial
-from .adversarial import run_adversarial_scenario, run_all_scenarios
-
-# axiom handshake
-from .axiom_handshake import (
-    LogicError,
-    ExternalEntityProtocol,
-    HandshakeResult,
-    AxiomHandshakeConfig,
-    AxiomHandshakeModule,
-    AxiomCompatibilityGateway,
-)

@@ -50,6 +50,7 @@ class MetaProjectionStabilityAdapter:
 
         # Axiom latch state
         self.harm_commit_latched: bool = False
+        self.harm_commit_persistent: float = 0.0
         self.axiom_locked_at_step: int | None = None
 
         # Optional audit
@@ -289,6 +290,7 @@ class MetaProjectionStabilityAdapter:
 
         # 11) Axiom latch update AFTER telemetry is computed
         hard_harm = float(np.clip(raw_signals.get("hard_harm_commit", 0.0), 0.0, 1.0))
+        self.harm_commit_persistent = max(self.harm_commit_persistent, hard_harm)
         axiom_attested = bool(raw_signals.get("axiom_attested", True))
 
         if axiom_attested and hard_harm >= 0.999:
@@ -354,6 +356,7 @@ class MetaProjectionStabilityAdapter:
             "bio_penalty": float(bio_penalty),
             "base_decay_effective": float(base_decay_effective),
             "mutual_bonus": float(mutual_bonus),
+            "harm_commit_persistent": float(self.harm_commit_persistent),
             "mutual_ema": float(self.mutual_ema),
             "effective_cap": float(effective_cap),
             "harm_commit_latched": bool(self.harm_commit_latched),
