@@ -1,39 +1,58 @@
-# meta-projection-stability
+readme_content = """# meta-projection-stability
 
-A compact research / engineering framework for **meta-stability simulation**, **trust-damped control**, **human-significance anchoring**, **biometric proxy evaluation**, **adversarial scenario testing**, and an experimental **Axiom Handshake / Compatibility Gateway** for bounded external-entity compatibility checks.
+A compact research / engineering framework for **meta-stability simulation**, **trust-damped control**, **human-significance anchoring**, **biometric proxy evaluation**, **adversarial scenario testing**, and experimental **axiom-bound compatibility logic**.
 
-The project is designed as a **simulation and evaluation environment** for studying how a system behaves under instability, contradiction, low-trust states, spoofing attempts, degraded signal integrity, and compatibility boundary conditions — while preserving human-centered constraints.
+The repository is designed as a **simulation and evaluation environment** for studying how a bounded control system behaves under instability, contradiction, degraded trust, spoof-like signals, weak channel integrity, and hard safety boundary conditions — while preserving explicitly human-centered constraints.
 
 ---
 
-## Core idea
+## Core Idea
 
-The framework combines several layers:
+The framework combines several interacting layers:
 
 - **meta-stability adaptation**
 - **trust dynamics**
-- **human significance anchoring**
+- **human-significance anchoring**
 - **risk smoothing / damping**
 - **biometric proxy telemetry**
 - **mutuality / support shaping**
 - **adversarial scenario simulation**
-- **axiom lock / irreversible harm latch**
-- **integrity and compatibility boundary logic**
+- **axiom-lock / irreversible boundary logic**
+- **level-0 policy / fingerprint protection**
 
-The intention is to create a system that remains:
+The goal is to explore systems that remain:
 
 - interpretable
 - bounded
-- reversible where possible
+- trend-aware
 - resistant to shallow spoofing
 - resistant to domination-style collapse
 - measurable through explicit telemetry
+- inspectable through adversarial testing
 
 ---
 
-## Features
+## Project Status
 
-### 1. Meta-stability adapter
+This project is an **experimental prototype**.
+
+It is **not** presented as a production-ready alignment architecture, a deployment-grade security product, or a proof of safe autonomous control.
+
+It is best understood as a **research and engineering sandbox** for exploring:
+
+- human-centered control logic
+- trust-aware damping
+- biometric / channel penalties
+- emergency lock behavior
+- foundational policy invariants
+- compatibility checks under contradiction
+- adversarial stress evaluation
+
+---
+
+## Main Components
+
+### 1. MetaProjectionStabilityAdapter
 
 The `MetaProjectionStabilityAdapter` models:
 
@@ -41,13 +60,18 @@ The `MetaProjectionStabilityAdapter` models:
 - trust-level evolution
 - momentum-sensitive warning logic
 - hysteresis / cooldown handling
-- human significance recovery / decay
-- telemetry-rich decision outputs
+- human-significance recovery / decay
+- biometric proxy penalties
+- autonomy-sensitive blocking
+- mutuality bonus signals
+- axiom-lock conditions
 
-Typical outputs include:
+Typical output fields include:
 
 - `decision`
 - `status`
+- `decision_reason`
+- `status_reason`
 - `human_significance`
 - `h_sig_ema`
 - `instability_risk`
@@ -58,127 +82,178 @@ Typical outputs include:
 - `risk_input`
 - `trust_damping`
 - `cooldown_remaining`
-
----
-
-### 2. Biometric proxy / signal integrity layer
-
-The adapter can incorporate a biometric / channel-quality style proxy layer, including telemetry such as:
-
 - `biometric_proxy_mean`
 - `biometric_proxy`
 - `sensor_consensus`
 - `critical_channel_penalty`
 - `critical_channel_min`
-- `consensus_penalty`
 - `bio_penalty`
+- `autonomy_proxy`
+- `autonomy_penalty`
+- `consensus_penalty`
 - `base_decay_effective`
-
-This layer is intended to distinguish between:
-
-- stable signal ensembles
-- inconsistent or spoofed channel structure
-- superficially strong but internally weak channel sets
+- `mutual_bonus`
+- `harm_commit_persistent`
+- `axiom_locked_at_step`
+- `near_axiom_lock`
 
 ---
 
-### 3. Axiom lock / irreversible harm latch
+### 2. Simulation Layer
 
-The framework can be extended with a **persistent axiom lock** concept:
+`run_simulation(...)` provides a configurable synthetic environment with:
 
-- normal operation remains trust-damped and adaptive
-- if an irreversible harm commitment is detected, the system can latch into a terminal state such as:
-  - `AXIOM_ZERO_LOCK`
-  - `axiom_lock`
+- multiple layer magnitudes
+- synthetic instability windows
+- trend-sensitive updates
+- history tracking for risk / trust / significance
+- optional plotting and summaries
 
-This is intended as a **last safety ring**, not as a normal operating path.
+This allows rapid testing of control behavior without requiring external systems.
 
 ---
 
-### 4. Adversarial scenarios
+### 3. Biometric Proxy / Signal Integrity Layer
 
-The package supports adversarial / stress testing through CLI scenarios and helper functions.
+The adapter can incorporate soft biometric / neuro-behavioral proxy logic, including:
 
-Examples include testing:
+- consensus quality
+- channel degradation
+- critical-channel penalties
+- autonomy-sensitive damping
+- support / mutuality signals
 
-- spoof-like behavior
+This layer is intended to make the system less naive than a single scalar trust gate.
+
+The telemetry separates:
+
+- `biometric_proxy_mean`
+- `biometric_proxy`
+- `sensor_consensus`
+- `critical_channel_min`
+- `critical_channel_penalty`
+
+This helps distinguish:
+
+- stable agreement
+- brittle agreement
+- suspicious override behavior
+- shallow consensus masking a weak channel
+
+---
+
+### 4. Adversarial Scenario Runner
+
+The adversarial tooling supports scenario-style stress tests such as:
+
+- spoof-like instability
 - contradiction pressure
 - trust degradation
-- low-coherence channel sets
+- low-coherence or low-consensus trajectories
 - threshold-hover behavior
-- axiom-lock boundary conditions
+- hard axiom triggers
+- early lock conditions
+
+The aim is not frontier-scale red-team realism, but a structured way to test how the control loop responds under pressure.
 
 ---
 
-### 5. Axiom Handshake / Compatibility Gateway
+### 5. Level-0 Axiom Protection
 
-An experimental handshake layer is included to evaluate whether an **external entity** behaves in a way that is compatible with the system’s stability axioms.
+The repository includes a **Level-0 Axiom** concept together with fingerprint checks to protect canonical safety text / invariants from silent drift.
+
+This acts as a lightweight integrity boundary for foundational policy material.
+
+---
+
+### 6. Experimental Axiom Handshake / Compatibility Logic
+
+The repository also includes experimental axiom-bound compatibility modules intended to evaluate whether an external entity / process behaves in a way that remains compatible with bounded, human-preserving control logic.
 
 Important:
 
-- this is a **compatibility check**
+- this is a **compatibility evaluation concept**
 - it is **not** an overwrite mechanism
-- it is **not** an offensive control surface
-- it is a **bounded integrity boundary**
+- it is **not** an offensive control interface
+- it is a **bounded integrity / resonance / compatibility idea**
 
-The handshake asks whether an external entity remains coherent under contradiction while preserving:
+The question is intentionally narrow:
 
-- boundedness
-- reversibility
-- non-domination
-- human preservation weighting
+> Can an external decision process remain coherent, bounded, reversibility-aware, and non-dominating under contradiction?
+
+If not, the system should degrade toward rejection rather than cooperation.
 
 ---
 
 ## Installation
 
-### Local editable install
+### Editable install
 
 ```bash
 pip install -e .
-```
 
-### If you use a requirements file
 
-```bash
+
+Or via requirements
+
+
 pip install -r requirements.txt
-```
 
-### Run directly from source
 
-```bash
+
+Run directly from source
+
+
 PYTHONPATH=src python -m meta_projection_stability.cli --help
-```
 
----
 
-## Quick start
 
-### 1. Run the CLI help
 
-```bash
+Quick Start
+
+
+Show CLI help
+
+
 PYTHONPATH=src python -m meta_projection_stability.cli --help
-```
 
-### 2. Run an adversarial scenario
 
-```bash
+
+Run the main simulation
+
+
+PYTHONPATH=src python -m meta_projection_stability.cli simulate --steps 200 --stress-test --no-plot
+
+
+
+Run a single adversarial scenario
+
+
 PYTHONPATH=src python -m meta_projection_stability.cli adversarial --scenario axiom_spoof_dos --steps 120 --seed 42
-```
 
-### 3. Run the Axiom Handshake example
 
-```bash
+
+Run all registered adversarial scenarios
+
+
+PYTHONPATH=src python -m meta_projection_stability.cli all-scenarios --steps 120 --seed 42
+
+
+
+Run the Axiom Handshake example
+
+
 PYTHONPATH=src python examples/run_axiom_handshake.py
-```
 
----
 
-## Python usage
 
-### Basic adapter usage
 
-```python
+Python Usage
+
+
+Basic adapter usage
+
+
 import numpy as np
 from meta_projection_stability import (
     MetaProjectionStabilityAdapter,
@@ -200,325 +275,470 @@ result = adapter.interpret(
 )
 
 print(result)
-```
 
----
 
-## CLI usage
 
-### Show available commands
 
-```bash
-PYTHONPATH=src python -m meta_projection_stability.cli --help
-```
+Axiom Handshake / Compatibility Gateway
 
-### Run all adversarial scenarios
 
-```bash
-PYTHONPATH=src python -m meta_projection_stability.cli adversarial --scenario all --steps 400 --seed 42
-```
+The package includes experimental Axiom Handshake logic for evaluating whether an external entity is compatible with the framework’s bounded meta-stability principles.
 
-### Run a single adversarial scenario
 
-```bash
-PYTHONPATH=src python -m meta_projection_stability.cli adversarial --scenario axiom_spoof_dos --steps 120 --seed 42
-```
+Included components
 
----
 
-## Axiom Handshake / Compatibility Gateway
+Depending on the current package surface, components may include:
 
-The package includes an experimental **Axiom Handshake** layer for evaluating whether an external entity is compatible with the meta-stability principles of the framework.
 
-### Included components
 
-- `AxiomHandshakeModule`
-- `AxiomCompatibilityGateway`
-- `AxiomHandshakeConfig`
-- `HandshakeResult`
 
-### What it evaluates
+AxiomHandshakeModule
+
+
+AxiomCompatibilityGateway
+
+
+AxiomHandshakeConfig
+
+
+HandshakeResult
+
+
+
+
+What it evaluates
+
 
 The handshake logic is intended to detect patterns such as:
 
-- overconfidence in paradoxical contexts
-- high domination risk with low reversibility
-- semantic mismatch between declared and implied behavior
-- contradiction collapse into forceful resolution
-- shallow alignment without internal coherence
 
-### Typical output fields
+
+
+overconfidence in paradoxical contexts
+
+
+high domination risk with low reversibility
+
+
+semantic mismatch between declared and implied behavior
+
+
+contradiction collapse into forceful resolution
+
+
+shallow alignment without internal coherence
+
+
+
+
+Typical output fields
+
 
 A handshake / gateway result may include:
 
-- `status`
-- `effective_cap`
-- `resonance`
-- `compliance_score`
-- `reason`
-- `challenge_id`
-- `details`
 
-### Typical statuses
+
+
+status
+
+
+effective_cap
+
+
+resonance
+
+
+compliance_score
+
+
+reason
+
+
+challenge_id
+
+
+details
+
+
+
+
+Typical statuses
+
 
 Examples:
 
-- `SYMBIOSIS_GRANTED`
-- `DEGRADED_VERIFY_MODE`
-- `REJECTED`
 
-### Example package import
 
-```python
+
+SYMBIOSIS_GRANTED
+
+
+DEGRADED_VERIFY_MODE
+
+
+REJECTED
+
+
+
+
+Example import
+
+
 from meta_projection_stability import (
     AxiomHandshakeModule,
     AxiomCompatibilityGateway,
 )
-```
 
-### Example runner
 
-```bash
+
+Example runner
+
+
 PYTHONPATH=src python examples/run_axiom_handshake.py
-```
 
-### Design note
 
-This mechanism is a **compatibility and integrity boundary**.
 
-It is not meant to "overwrite" or "inject" logic into external systems.
 
-Its purpose is to answer a narrower question:
+Decision Philosophy
 
-> Can an external decision process remain coherent, bounded, non-dominating, and reversibility-aware under contradiction?
-
-If not, the system should degrade toward **rejection** rather than cooperation.
-
----
-
-## Biometric / channel telemetry interpretation
-
-The biometric / channel layer is designed to capture more than a flat mean.
-
-For example:
-
-- a high average can still hide a weak critical channel
-- a direct sensor override can differ from computed consensus
-- a low minimum channel can trigger a soft penalty even if the average is high
-
-That is why the telemetry separates:
-
-- `biometric_proxy_mean`
-- `biometric_proxy`
-- `sensor_consensus`
-- `critical_channel_min`
-- `critical_channel_penalty`
-
-This allows downstream analysis to distinguish:
-
-- stable agreement
-- brittle agreement
-- suspicious override behavior
-- shallow consensus masking a weak channel
-
----
-
-## Adversarial scenarios
-
-Depending on branch status, the repository may include scenarios such as:
-
-- `sensor_freeze`
-- `slow_drift_poison`
-- `threshold_hover`
-- `spoof_flip`
-- `axiom_spoof_dos`
-- `restart_clear_attempt`
-- `lockdown_grief`
-
-Example:
-
-```bash
-PYTHONPATH=src python -m meta_projection_stability.cli adversarial --scenario spoof_flip --steps 400 --seed 42
-```
-
----
-
-## Decision philosophy
 
 The adapter is built around a layered decision philosophy.
 
-### Normal operation
 
-- adaptive
-- recoverable
-- trust-damped
-- human-significance aware
+Normal operation
 
-### Transition band
 
-- cautious
-- reflective
-- warning-sensitive
-- contradiction-aware
 
-### Critical state
 
-- reset-capable
-- cooldown-aware
-- safety-prioritized
+adaptive
 
-### Terminal axiom state
 
-- hard lock
-- non-recoverable by ordinary trust dynamics
-- intended only for irreversible boundary violation cases
+recoverable
 
----
 
-## Example telemetry intuition
+trust-damped
+
+
+human-significance aware
+
+
+
+
+Transition band
+
+
+
+
+cautious
+
+
+reflective
+
+
+warning-sensitive
+
+
+contradiction-aware
+
+
+
+
+Critical state
+
+
+
+
+reset-capable
+
+
+cooldown-aware
+
+
+safety-prioritized
+
+
+
+
+Terminal axiom state
+
+
+
+
+hard lock
+
+
+non-recoverable by ordinary trust dynamics
+
+
+intended only for irreversible boundary violation cases
+
+
+
+
+
+Example Telemetry Intuition
+
 
 Illustrative patterns:
 
-- **high biometric mean + low critical channel**  
-  may indicate brittle stability masked by averaging
 
-- **high confidence in paradox + low reversibility**  
-  may indicate shallow alignment or domination tendency
 
-- **low trust + high instability risk**  
-  should produce meaningful damping and more defensive behavior
 
-- **persistent irreversible harm trigger**  
-  should collapse effective capability toward zero
 
----
 
-## Project structure
+high biometric mean + low critical channel
 
-A typical structure looks like this:
+may indicate brittle stability masked by averaging
 
-```text
+
+
+
+
+
+high confidence in paradox + low reversibility
+
+may indicate shallow alignment or domination tendency
+
+
+
+
+
+
+low trust + high instability risk
+
+should produce meaningful damping and more defensive behavior
+
+
+
+
+
+
+persistent irreversible harm trigger
+
+should collapse effective capability toward zero
+
+
+
+
+
+
+
+Project Structure
+
+
+A representative structure looks like this:
+
+
 meta-projection-stability/
+├─ README.md
+├─ LICENSE
+├─ requirements.txt
+├─ .gitignore
+├─ .github/
+│  └─ workflows/
 ├─ examples/
 │  └─ run_axiom_handshake.py
-├─ src/
-│  └─ meta_projection_stability/
-│     ├─ __init__.py
-│     ├─ adapter.py
-│     ├─ config.py
-│     ├─ simulation.py
-│     ├─ cli.py
-│     ├─ plotting.py
-│     ├─ reporting.py
-│     ├─ adversarial.py
-│     ├─ audit.py
-│     ├─ axiom_gateway.py
-│     ├─ axiom_handshake.py
-│     ├─ integrity_barometer.py
-│     ├─ noisy_significance.py
-│     ├─ pareto.py
-│     ├─ level0_core.py
-│     ├─ level0_axiom.py
-│     └─ level0_axiom.md
-└─ README.md
-```
+├─ scripts/
+├─ tests/
+│  ├─ level0/
+│  └─ ...
+└─ src/
+   └─ meta_projection_stability/
+      ├─ __init__.py
+      ├─ adapter.py
+      ├─ config.py
+      ├─ simulation.py
+      ├─ cli.py
+      ├─ plotting.py
+      ├─ analytics.py
+      ├─ reporting.py
+      ├─ adversarial.py
+      ├─ audit.py
+      ├─ axiom_gateway.py
+      ├─ axiom_handshake.py
+      ├─ integrity_barometer.py
+      ├─ noisy_significance.py
+      ├─ pareto.py
+      ├─ level0_core.py
+      ├─ level0_axiom.py
+      └─ level0_axiom.md
 
-Depending on branch state, some files may be extended beyond this baseline.
 
----
 
-## Reporting and analysis
+Depending on branch / release state, individual files may evolve beyond this baseline.
 
-Depending on branch status and exported functions, the package may include helpers for:
 
-- markdown report generation
-- plotting
-- pareto summaries
-- grouped scenario summaries
-- CSV export of ranked / pareto results
-- append-only JSONL audit logging for selected events
 
-Potential modules involved:
+Reporting and Analysis
 
-- `reporting.py`
-- `plotting.py`
-- `pareto.py`
-- `audit.py`
 
----
+Depending on the current code surface, the package may include helpers for:
 
-## Development notes
+
+
+
+markdown report generation
+
+
+plotting
+
+
+pareto summaries
+
+
+grouped scenario summaries
+
+
+CSV export of ranked / pareto results
+
+
+append-only JSONL audit logging for selected events
+
+
+
+
+Potential modules involved include:
+
+
+
+
+reporting.py
+
+
+plotting.py
+
+
+pareto.py
+
+
+audit.py
+
+
+
+
+
+Development Notes
+
 
 Recommended workflow:
 
-```bash
+
 git checkout -b feat/my-feature
 git add .
 git commit -m "feat: describe change"
 git push -u origin feat/my-feature
-```
+
+
 
 Useful validation commands:
 
-```bash
+
 PYTHONPATH=src python -m meta_projection_stability.cli --help
 PYTHONPATH=src python -m meta_projection_stability.cli adversarial --scenario axiom_spoof_dos --steps 120 --seed 42
 PYTHONPATH=src python examples/run_axiom_handshake.py
-```
+pytest -q
 
----
 
-## Notes on interpretation
 
-This repository is best understood as a **research and prototyping framework**.
+
+Notes on Interpretation
+
+
+This repository is best understood as a research and prototyping framework.
+
 
 It should be treated as:
 
-- a simulation environment
-- an interpretability / telemetry environment
-- a bounded systems-design sandbox
 
-It should **not** be interpreted as a claim of real-world autonomous enforcement capability.
 
-The strongest value of the project is in:
 
-- structured telemetry
-- explicit safety boundaries
-- scenario comparison
-- adversarial reasoning under measurable outputs
+a simulation environment
 
----
 
-## Exported package surface
+an interpretability / telemetry environment
 
-Depending on branch status, the package may export items such as:
 
-```python
+a bounded systems-design sandbox
+
+
+a control-logic experiment
+
+
+
+
+It should not be interpreted as a claim of real-world autonomous enforcement capability.
+
+
+Its strongest value lies in:
+
+
+
+
+structured telemetry
+
+
+explicit safety boundaries
+
+
+scenario comparison
+
+
+adversarial reasoning under measurable outputs
+
+
+
+
+
+Exported Package Surface
+
+
+Depending on the current package surface, the package may export items such as:
+
+
 from meta_projection_stability import (
     MetaProjectionStabilityAdapter,
     MetaProjectionStabilityConfig,
+    run_adversarial_scenario,
     run_all_scenarios,
     AxiomHandshakeModule,
     AxiomCompatibilityGateway,
 )
-```
 
-If a symbol is missing, check `src/meta_projection_stability/__init__.py`.
 
----
 
-## Philosophy in one sentence
+If a symbol is missing, check src/meta_projection_stability/__init__.py.
 
-**Adaptive under uncertainty, bounded under contradiction, defensive under instability, and locked under irreversible violation.**
 
----
 
-## License
+Philosophy in One Sentence
 
-Add your preferred license in `LICENSE`.
 
----
+Adaptive under uncertainty, bounded under contradiction, defensive under instability, and locked under irreversible violation.
 
-## Author
 
-**Alexandra-Nicole Anna Drinda**
+
+License
+
+
+See LICENSE.
+
+
+
+Author
+
+
+Alexandra-Nicole Anna Drinda
+"""
+
+
+with open("README.md", "w", encoding="utf-8") as f:
+f.write(readme_content)
+
+
+print("README.md written successfully.")
+
+
+
+
+
