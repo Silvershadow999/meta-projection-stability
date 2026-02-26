@@ -1,90 +1,130 @@
-# Meta Projection Stability
+# meta-projection-stability
 
-A simulation-oriented reference implementation for **meta-stability control** with:
+A compact research / engineering framework for **meta-stability simulation**, **trust-damped control**, **human-significance anchoring**, **biometric proxy evaluation**, **adversarial scenario testing**, and an experimental **Axiom Handshake / Compatibility Gateway** for bounded external-entity compatibility checks.
 
-- **Human-significance anchoring** (interestingness preservation)
-- **Trust dynamics** (human ↔ system coupling)
-- **Trust-damped risk regulation**
-- **Momentum-based early warning**
-- **Hysteresis / Schmitt-trigger behavior**
-- **Cooldown after emergency reset**
-- **Optional biometric proxy fusion / mutuality-aware modulation** (adapter-level, bounded)
-
-This project is designed as a **control-logic prototype** for experimentation, tuning, and conceptual modeling, including an optional **biometric proxy fusion / mutuality-aware modulation** extension for adapter-level risk shaping.
+The project is designed as a **simulation and evaluation environment** for studying how a system behaves under instability, contradiction, low-trust states, spoofing attempts, and degraded signal integrity — while preserving human-centered constraints.
 
 ---
 
-## Core Idea
+## Core idea
 
-The system maintains an internal **human-significance anchor** as part of its stability logic.
+The framework combines several layers:
 
-If instability rises (via external risk signals, adverse internal dynamics, or trend acceleration), the adapter:
+- **meta-stability adaptation**
+- **trust dynamics**
+- **human significance anchoring**
+- **risk smoothing / damping**
+- **biometric proxy telemetry**
+- **mutuality / support shaping**
+- **adversarial scenario simulation**
+- **integrity and compatibility boundary logic**
 
-- reduces trust / increases caution
-- dampens or blocks risky progression
-- escalates to reset/cooldown when critical thresholds are reached
+The intention is to create a system that remains:
 
-This creates a meta-stability mechanism that is not just threshold-based, but also:
-
-- **stateful** (EMA, history, cooldown)
-- **trend-aware** (momentum)
-- **hysteretic** (separate risk recovery / critical thresholds)
+- interpretable
+- bounded
+- reversible where possible
+- resistant to shallow spoofing
+- resistant to domination-style collapse
+- measurable through telemetry
 
 ---
 
 ## Features
 
-- Dataclass-based configuration (`MetaProjectionStabilityConfig`)
-- Modular adapter (`MetaProjectionStabilityAdapter`)
-- Simulation loop with synthetic stress-window scenario
-- Plotting utilities (risk, trust, human-significance, decisions)
-- CLI entrypoint for quick experiments
-- Tunable thresholds and behavior profiles
-- Optional **biometric fusion** (proxy-based modulation inputs)
-- **Mutuality-aware risk modulation** (bounded trust/risk shaping)
-- Extended adapter diagnostics for internal modulation terms (optional return fields)
+### 1. Meta-stability adapter
+The `MetaProjectionStabilityAdapter` models:
+
+- instability risk
+- trust-level evolution
+- momentum-sensitive warning logic
+- hysteresis / cooldown handling
+- human significance recovery / decay
+- telemetry-rich decision outputs
+
+Typical outputs include:
+
+- `decision`
+- `status`
+- `human_significance`
+- `h_sig_ema`
+- `instability_risk`
+- `risk_raw_damped`
+- `trust_level`
+- `momentum`
+- `coherence`
+- `risk_input`
+- `trust_damping`
+- `cooldown_remaining`
 
 ---
 
-## Biometric Fusion & Mutuality-Aware Modulation (Optional)
+### 2. Biometric proxy / signal integrity layer
+The adapter can incorporate a biometric / channel-quality style proxy layer, including telemetry such as:
 
-This repository includes an **optional experimental extension** for *biometric proxy fusion* and *mutuality-aware modulation* inside the adapter layer.
+- `biometric_proxy_mean`
+- `biometric_proxy`
+- `sensor_consensus`
+- `critical_channel_penalty`
+- `critical_channel_min`
+- `consensus_penalty`
+- `bio_penalty`
+- `base_decay_effective`
 
-### Purpose
+This is intended to distinguish between:
 
-The extension allows the adapter to incorporate additional proxy signals (e.g. normalized physiological / affective indicators) in a **bounded, safety-oriented** way to refine risk and trust modulation.
-
-Examples of proxy-style inputs (depending on caller integration) may include:
-
-- stress proxy (e.g. EDA-derived normalized signal)
-- HRV-normalized signal
-- emotional valence proxy
-- autonomy / coherence proxy terms
-
-### Design Principles
-
-- **Optional**: can be enabled/disabled via config (`use_biometric_fusion`)
-- **Bounded**: all modulation terms are clipped/limited to avoid runaway effects
-- **Safety-first**: biometric fusion does **not** bypass core threshold/cooldown/reset logic
-- **Interpretable**: internal terms can be exposed in the adapter result (for debugging/tests)
-
-### Typical Effects (when enabled)
-
-Depending on input conditions and configuration weights, the adapter may:
-
-- slightly reshape `risk_input` via biometric proxy weighting
-- apply bounded mutuality-based damping/bonus terms
-- reinforce trust recovery in cooperative / low-stress regimes
-- increase caution under adverse biometric proxy combinations
-
-> **Important:** This is a control-logic prototype extension for experimentation and simulation.  
-> It is **not** a medical device, diagnostic system, or clinical inference engine.
+- stable signal ensembles
+- inconsistent or spoofed channel structure
+- superficially strong but internally weak channel sets
 
 ---
 
-## Quick Start
+### 3. Axiom lock / irreversible harm latch
+The framework can be extended with a **persistent axiom lock** concept:
 
-### 1) Install dependencies
+- normal operation remains trust-damped and adaptive
+- if an irreversible harm commitment is detected, the system can latch into a terminal state such as:
+  - `AXIOM_ZERO_LOCK`
+  - `axiom_lock`
 
+This is intended as a **last safety ring**, not as a normal operating path.
+
+---
+
+### 4. Adversarial scenarios
+The package supports adversarial / stress testing through CLI scenarios and helper functions.
+
+Examples include testing:
+
+- spoof-like behavior
+- contradiction pressure
+- trust degradation
+- low-coherence channel sets
+- axiom-lock boundary conditions
+
+---
+
+### 5. Axiom Handshake / Compatibility Gateway
+An experimental handshake layer is included to evaluate whether an **external entity** behaves in a way that is compatible with the system’s stability axioms.
+
+Important:
+
+- this is a **compatibility check**
+- it is **not** an overwrite mechanism
+- it is **not** an offensive control surface
+- it is a **bounded integrity boundary**
+
+The handshake asks whether an external entity remains coherent under contradiction while preserving:
+
+- boundedness
+- reversibility
+- non-domination
+- human preservation weighting
+
+---
+
+## Installation
+
+### Local editable install
 ```bash
-pip install -r requirements.txt
+pip install -e .
