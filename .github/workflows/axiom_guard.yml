@@ -1,0 +1,37 @@
+name: Axiom Guard (Level-0)
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  axiom_guard:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install numpy pytest
+
+      - name: Verify axiom file exists
+        run: |
+          test -f src/meta_projection_stability/level0_axiom.md
+          echo "✅ level0_axiom.md gefunden"
+
+      - name: Run axiom hash guard
+        run: |
+          if [ -f tests/hash/test_level0_axiom_hash.py ]; then
+            python tests/hash/test_level0_axiom_hash.py
+          else
+            echo "⚠️ Hash-Testdatei fehlt: tests/hash/test_level0_axiom_hash.py"
+            exit 1
+          fi
