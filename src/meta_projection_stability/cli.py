@@ -6,7 +6,6 @@ from typing import Any, Dict
 from .config import MetaProjectionStabilityConfig
 from .simulation import run_simulation
 
-# Optional imports: CLI soll nicht sterben, wenn ein Modul fehlt / umgebaut wurde
 try:
     from .plotting import plot_results, print_summary
 except Exception:
@@ -84,64 +83,21 @@ def build_parser() -> argparse.ArgumentParser:
 
     subparsers = parser.add_subparsers(dest="command")
 
-<<<<<<< HEAD
-    # simulate
-=======
-    # -----------------------------
-    # simulate
-    # -----------------------------
->>>>>>> origin/main
     sim = subparsers.add_parser("simulate", help="Run the main simulation")
     sim.add_argument("--steps", type=int, default=1400, help="Number of simulation steps")
     sim.add_argument("--levels", type=int, default=3, help="Number of layers")
     sim.add_argument("--seed", type=int, default=42, help="Random seed")
     sim.add_argument("--stress-test", action="store_true", help="Enable built-in stress window")
     sim.add_argument("--no-plot", action="store_true", help="Skip plotting")
-<<<<<<< HEAD
     sim.add_argument("--global-sense", action="store_true", help="Enable real-world macro modulation before simulation")
     sim.add_argument("--gs-debug", action="store_true", help="Print GlobalSense debug output")
     sim.add_argument("--gs-force-refresh", action="store_true", help="Ignore GlobalSense cache and fetch fresh values")
 
-    # adversarial
     adv = subparsers.add_parser("adversarial", help="Run a named adversarial scenario")
     adv.add_argument("--scenario", type=str, required=True, help="Scenario name")
     adv.add_argument("--steps", type=int, default=120, help="Scenario steps")
     adv.add_argument("--seed", type=int, default=42, help="Random seed")
 
-    # all-scenarios
-    all_adv = subparsers.add_parser("all-scenarios", help="Run all adversarial scenarios")
-    all_adv.add_argument("--steps", type=int, default=120, help="Scenario steps")
-    all_adv.add_argument("--seed", type=int, default=42, help="Random seed")
-=======
-
-    sim.add_argument(
-        "--global-sense",
-        action="store_true",
-        help="Enable real-world macro modulation before simulation",
-    )
-    sim.add_argument(
-        "--gs-debug",
-        action="store_true",
-        help="Print GlobalSense snapshot / stress index debug output",
-    )
-    sim.add_argument(
-        "--gs-force-refresh",
-        action="store_true",
-        help="Ignore GlobalSense cache and fetch fresh values",
-    )
->>>>>>> origin/main
-
-    # -----------------------------
-    # adversarial
-    # -----------------------------
-    adv = subparsers.add_parser("adversarial", help="Run a named adversarial scenario")
-    adv.add_argument("--scenario", type=str, required=True, help="Scenario name")
-    adv.add_argument("--steps", type=int, default=120, help="Scenario steps")
-    adv.add_argument("--seed", type=int, default=42, help="Random seed")
-
-    # -----------------------------
-    # all-scenarios
-    # -----------------------------
     all_adv = subparsers.add_parser("all-scenarios", help="Run all adversarial scenarios")
     all_adv.add_argument("--steps", type=int, default=120, help="Scenario steps")
     all_adv.add_argument("--seed", type=int, default=42, help="Random seed")
@@ -182,11 +138,7 @@ def _run_adversarial(args: argparse.Namespace) -> None:
         raise RuntimeError("adversarial module is not available")
 
     result = run_adversarial_scenario(
-<<<<<<< HEAD
         name=args.scenario,
-=======
-        scenario=args.scenario,
->>>>>>> origin/main
         steps=args.steps,
         seed=args.seed,
     )
@@ -221,11 +173,6 @@ def main() -> None:
     parser = build_parser()
     args = parser.parse_args()
 
-<<<<<<< HEAD
-=======
-    # Backward-compatible default:
-    # Wenn kein Subcommand angegeben wurde, behandeln wir es wie "simulate".
->>>>>>> origin/main
     if args.command is None:
         args.command = "simulate"
         if not hasattr(args, "steps"):

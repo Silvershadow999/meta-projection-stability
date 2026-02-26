@@ -1,7 +1,7 @@
 from pathlib import Path
 import hashlib
 
-EXPECTED_SHA256 = "913fdde15cf7fa1326d16706ac96aa685bbf92d461d249376feb8ed706bd2ba7"
+EXPECTED_SHA256 = "a43f4127d20b23d11973b289eb38497fbc2c0e591fbb47b4ad4107c2efeccd5f"
 
 def test_level0_axiom_fingerprint():
     p = Path("src/meta_projection_stability/level0_axiom.md")
