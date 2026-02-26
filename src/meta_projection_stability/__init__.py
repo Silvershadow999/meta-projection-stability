@@ -18,6 +18,9 @@ from .level0_axiom import (
     Level0Decision,
     Level0AxiomEngine,
 )
+from .adversarial import run_adversarial_scenario, run_all_scenarios
+from .axiom_handshake import AxiomHandshakeModule
+from .axiom_gateway import AxiomCompatibilityGateway
 
 # Optional plotting exports
 try:
@@ -61,8 +64,15 @@ __all__ = [
     "Level0Thresholds",
     "Level0Decision",
     "Level0AxiomEngine",
+<<<<<<< HEAD
     "run_adversarial_scenario",
     "run_all_scenarios",
+=======
+    # adversarial
+    "run_adversarial_scenario",
+    "run_all_scenarios",
+    # axiom / compatibility
+>>>>>>> origin/main
     "AxiomHandshakeModule",
     "AxiomCompatibilityGateway",
 ]
