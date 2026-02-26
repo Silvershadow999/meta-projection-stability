@@ -29,9 +29,9 @@ jobs:
 
       - name: Run axiom hash guard
         run: |
-          if [ -f tests/hash/test_level0_axiom_hash.py ]; then
-            python tests/hash/test_level0_axiom_hash.py
+          if [ -f tests/test_level0_axiom.py ]; then
+            python tests/test_level0_axiom.py
           else
-            echo "⚠️ Hash-Testdatei fehlt: tests/hash/test_level0_axiom_hash.py"
+            echo "⚠️ Hash-Testdatei fehlt: tests/test_level0_axiom.py"
             exit 1
           fi
