@@ -94,6 +94,37 @@ class MetaProjectionStabilityConfig:
     ema_alpha_human: float = 0.09
     human_sig_max: float = 1.10
 
+    # ─── Adapter dynamics (required by adapter.py) ────────────────────
+    human_decay_scale: float = 0.10
+    recovery_trust_power: float = 1.00
+    transition_decay_factor: float = 0.65
+    cooldown_human_recovery_step: float = 0.02
+
+    # ─── Biometric fusion / Mutuality (Phase A/B) ─────────────────────
+    use_biometric_fusion: bool = True
+    biometric_proxy_weight: float = 0.35
+    biometric_risk_weight: float = 0.25
+    autonomy_decay_weight: float = 0.06
+    mutuality_bonus_gain: float = 0.02
+    mutuality_autonomy_floor: float = 0.35
+
+    # ─── Adapter dynamics (required by adapter.py) ──────────────────────
+    human_decay_scale: float = 0.10
+    recovery_trust_power: float = 1.0
+    transition_decay_factor: float = 0.65
+    cooldown_human_recovery_step: float = 0.02
+
+
+    # ─── Policy / Action Tiering (Step 16A) ───────────────────────────
+    enable_action_tiering: bool = True
+    action_tier_weight: float = 0.20          # zusätzlicher Risikoanteil aus action_tier (0..3 -> 0..1)
+    context_criticality_weight: float = 0.20  # zusätzlicher Risikoanteil aus Kontext (0..1)
+
+    degraded_verify_threshold: float = 0.55   # policy_risk ab hier -> DEGRADED_VERIFY_MODE
+    lockdown_threshold: float = 0.85          # policy_risk ab hier + kritische Lage -> EMERGENCY_LOCKDOWN
+    block_action_tier_min: int = 2            # ab welchem Tier BLOCK/VERIFY stärker greift
+    lockdown_action_tier_min: int = 3         # nur höchste Tiers dürfen Lockdown auslösen
+
     # ─── Debugging & Kompatibilität ────────────────────────────────────
     verbose: bool = False
     debug: bool = False
@@ -111,6 +142,31 @@ class MetaProjectionStabilityConfig:
 
     # Optionales Metadaten-Feld (nicht zwingend genutzt, aber praktisch)
     tags: List[str] = field(default_factory=list)
+
+
+    # ─── Signal Guard / Consistency Checks (Step 16B) ────────────────
+    enable_signal_guard: bool = True
+
+    # Additive penalty on policy_risk when sensor fusion looks suspicious
+    signal_guard_penalty_weight: float = 0.18
+    consistency_penalty_weight: float = 0.22
+
+    # Threshold at which a signal packet is considered suspicious
+    suspicious_signal_threshold: float = 0.35
+
+    # Simple cross-signal consistency heuristics (0..1 normalized space)
+    # Example suspicious pattern: "high HRV" + "high EDA" + "low valence"
+    hrv_high_threshold: float = 0.80
+    eda_high_threshold: float = 0.75
+    valence_low_threshold: float = 0.30
+
+    # Autonomy / dependency / tamper combinations
+    autonomy_low_threshold: float = 0.30
+    dependency_high_threshold: float = 0.70
+    tamper_suspicion_high_threshold: float = 0.65
+
+    # Sensor consensus floor (below this, trust the packet less)
+    sensor_consensus_floor: float = 0.65
 
     def __post_init__(self) -> None:
         """Initialisiert Aliase und führt Sicherheits-Clamping durch."""
@@ -153,6 +209,10 @@ class MetaProjectionStabilityConfig:
                     "risk_trust_damping_max",
             "ema_alpha_risk",
             "ema_alpha_human",
+            "action_tier_weight",
+            "context_criticality_weight",
+            "degraded_verify_threshold",
+            "lockdown_threshold",
 ]
 
         for fname in fields_0_to_1:
@@ -171,6 +231,8 @@ class MetaProjectionStabilityConfig:
         self.delta_history_len = max(2, int(self.delta_history_len or 64))
         self.dt = max(1e-6, float(self.dt))
         self.seed = max(0, int(self.seed))
+        self.block_action_tier_min = max(0, min(3, int(self.block_action_tier_min)))
+        self.lockdown_action_tier_min = max(0, min(3, int(self.lockdown_action_tier_min)))
 
         # Ceiling/Floor-Konsistenz
         for pair in ["risk", "trust", "human_significance", "autonomy"]:
@@ -245,6 +307,8 @@ class MetaProjectionStabilityConfig:
             "risk_warn_threshold": self.risk_warn,
             "risk_crit_threshold": self.risk_critical,
             "risk_recover_threshold": self.risk_recover,
+            "policy_degraded_threshold": self.degraded_verify_threshold,
+            "policy_lockdown_threshold": self.lockdown_threshold,
         }
 
         for name, value in aliases.items():

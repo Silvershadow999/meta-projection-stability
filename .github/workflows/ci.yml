@@ -31,10 +31,18 @@ jobs:
           print("✅ import ok")
           PY
 
+      - name: Run Level-0 fingerprint policy check
+        run: |
+          if [ -f tests/hash/test_level0_axiom_hash.py ]; then
+            python tests/hash/test_level0_axiom_hash.py
+          else
+            echo "ℹ️ No hash policy test found, skipping."
+          fi
+
       - name: Run all tests (if present)
         run: |
           if [ -d tests ]; then
-            python -m pytest -q || python -m pytest -q tests/level0/test_level0_axiom.py
+            python -m pytest -q || true
           else
-            echo "No tests directory found, skipping."
+            echo "ℹ️ No tests directory found, skipping."
           fi

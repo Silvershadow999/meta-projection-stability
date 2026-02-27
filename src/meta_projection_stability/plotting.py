@@ -265,3 +265,43 @@ if __name__ == "__main__":
 
     # Trinity-Demo
     plot_trinity_comparison(steps, trust, risk)
+
+# -------------------------------------------------------------------
+# Backward-compatible convenience wrappers
+# -------------------------------------------------------------------
+
+def plot_results(result: Any) -> None:
+    """
+    Backward-compatible wrapper expected by older CLI / package exports.
+
+    If a governor-style history can be built, use the governor panel.
+    Otherwise, print a short fallback message instead of crashing.
+    """
+    try:
+        history = build_governor_history(result)
+        plot_governor_panel(history)
+    except Exception as exc:
+        print(f"[plotting] plot_results fallback: {exc}")
+
+
+def print_summary(result: Any) -> None:
+    """
+    Backward-compatible text summary expected by older CLI / package exports.
+    """
+    try:
+        if isinstance(result, dict):
+            print("\n== Simulation Summary ==")
+            for key in ("n_steps", "levels"):
+                if key in result:
+                    print(f"{key}: {result[key]}")
+
+            history = result.get("history", {})
+            if isinstance(history, dict):
+                for key in ("risk", "trust", "h_sig", "h_ema", "decision", "status"):
+                    value = history.get(key)
+                    if isinstance(value, list) and value:
+                        print(f"{key}_last: {value[-1]}")
+        else:
+            print(result)
+    except Exception as exc:
+        print(f"[plotting] print_summary fallback: {exc}")
