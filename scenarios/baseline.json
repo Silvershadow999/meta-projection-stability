@@ -1,0 +1,11 @@
+{
+  "scenario_id": "baseline",
+  "name": "Baseline (deterministic)",
+  "description": "Default config; used as reference for regressions.",
+  "seed": 42,
+  "config_overrides": {},
+  "tags": {
+    "tier": "p0",
+    "kind": "baseline"
+  }
+}
