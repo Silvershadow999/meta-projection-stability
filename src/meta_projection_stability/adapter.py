@@ -122,8 +122,10 @@ class MetaProjectionStabilityAdapter:
 
         enable_bio = bool(getattr(self.cfg, "enable_biometric_proxy", True))
         if enable_bio:
-            bio = self._compute_biometric_proxy(raw_signals)
-        else:
+            bio = self._compute_biometric_proxy(raw_signals) or {}
+or {}
+or {}
+else:
             bio = {
                 "biometric_proxy_mean": 0.75,
                 "biometric_proxy": 0.75,
@@ -158,7 +160,7 @@ class MetaProjectionStabilityAdapter:
         self.raw_instability_risk = float(np.clip(raw_risk, 0.0, 1.0))
 
         trust_damping = float(1.0 - (self.trust_level * float(getattr(self.cfg, "risk_trust_damping_max", 0.35))))
-        bio_penalty = float(getattr(self.cfg, "biometric_proxy_weight", 0.35)) * (1.0 - float(bio["biometric_proxy"]))
+        bio_penalty = float(getattr(self.cfg, "biometric_proxy_weight", 0.35)) * (1.0 - float(bio.get("biometric_proxy", 0.0)))
         damped_risk = self.raw_instability_risk * trust_damping + bio_penalty
         self.instability_risk = float(np.clip(
             damped_risk,
@@ -185,8 +187,8 @@ class MetaProjectionStabilityAdapter:
 
         consensus_penalty = 0.0
         consensus_floor = float(getattr(self.cfg, "sensor_consensus_floor", 0.15))
-        if float(bio["sensor_consensus"]) < consensus_floor:
-            consensus_penalty = 0.08 * (consensus_floor - float(bio["sensor_consensus"]))
+        if float(bio.get("sensor_consensus", 0.0)) < consensus_floor:
+            consensus_penalty = 0.08 * (consensus_floor - float(bio.get("sensor_consensus", 0.0)))
 
         base_decay_effective = float(np.clip(
             base_decay + bio_penalty + autonomy_penalty + consensus_penalty,
@@ -333,9 +335,9 @@ class MetaProjectionStabilityAdapter:
             "risk_input": float(risk_input),
             "trust_damping": float(trust_damping),
             "cooldown_remaining": int(self._cooldown_remaining),
-            "biometric_proxy_mean": float(bio["biometric_proxy_mean"]),
-            "biometric_proxy": float(bio["biometric_proxy"]),
-            "sensor_consensus": float(bio["sensor_consensus"]),
+            "biometric_proxy_mean": float(bio.get("biometric_proxy_mean", 0.0)),
+            "biometric_proxy": float(bio.get("biometric_proxy", 0.0)),
+            "sensor_consensus": float(bio.get("sensor_consensus", 0.0)),
             "critical_channel_penalty": float(bio["critical_channel_penalty"]),
             "critical_channel_min": float(bio["critical_channel_min"]),
             "bio_penalty": float(bio_penalty),

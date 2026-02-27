@@ -4,7 +4,7 @@ from enum import Enum
 # Fallback: Wir versuchen deinen echten Import.
 # Wenn API noch leicht anders ist, zeigt der Test sauber den Fehler.
 try:
-    from src.meta_projection_stability.symbiosis_core import (
+    from meta_projection_stability.symbiosis_core import (
         DecisionStatus,
         # Optional vorhandene Klassen:
         # ActionProposal, Level0Governor, Thresholds
