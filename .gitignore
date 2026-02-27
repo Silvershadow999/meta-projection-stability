@@ -234,3 +234,6 @@ axiom_state.json
 *.bak
 *.bak_*
 *indent_error_backup*
+
+# Local backups
+*.bak.*
