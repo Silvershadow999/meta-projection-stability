@@ -24,6 +24,7 @@ jobs:
           python -m pip install --upgrade pip
           # Prefer editable install from pyproject (works with src-layout)
           pip install -e .
+          pip install cyclonedx-bom
           # If you rely on requirements.txt too, uncomment:
           # pip install -r requirements.txt
 
@@ -32,7 +33,13 @@ jobs:
           chmod +x scripts/run_eval_clean.sh
           ./scripts/run_eval_clean.sh
 
-      - name: Upload evaluation artifacts
+      
+      - name: Generate SBOM
+        run: |
+          mkdir -p artifacts
+          cyclonedx-py --format json --output artifacts/sbom.json
+
+- name: Upload evaluation artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
