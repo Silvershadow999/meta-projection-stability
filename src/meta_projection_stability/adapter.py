@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections import deque
+from math import sqrt
 from typing import Dict, Any, Optional
 
 import numpy as np
@@ -49,6 +50,7 @@ class MetaProjectionStabilityAdapter:
             "risk_clamped": 0,
         }
         self._regime_counts: Dict[str, int] = {
+
             "nominal": 0,
             "transitioning": 0,
             "cooldown": 0,
@@ -56,68 +58,50 @@ class MetaProjectionStabilityAdapter:
             "axiom_lock": 0,
         }
 
+        # φ-Quasi-PID State (aperiodic)
+        self._phi = (1 + sqrt(5)) / 2
+        self._phi_error_integral: float = 0.0
+        self._phi_prev_error: float = 0.0
+        self._phi_penrose_corrections: deque = deque(maxlen=int(getattr(self.cfg, 'phi_approx_terms', 8)))
+
+
+
+    def _apply_quasi_phi_pid(self, raw_risk: float, delta_S: float) -> float:
+        """φ-Quasi-PID + aperiodic correction (feature-flagged)."""
+        if not getattr(self.cfg, 'phi_pid_enabled', True):
+            return float(raw_risk)
+
+        dt = float(getattr(self.cfg, 'dt', 1.0)) or 1.0
+        error = float(raw_risk) - 0.5
+
+        p_term = float(getattr(self.cfg, 'phi_kp', 1.618)) * error
+        self._phi_error_integral += error * dt
+        i_term = float(getattr(self.cfg, 'phi_ki', 0.618)) * self._phi_error_integral
+        d_term = float(getattr(self.cfg, 'phi_kd', 2.618)) * (error - self._phi_prev_error) / dt
+
+        correction = 0.0
+        terms = int(getattr(self.cfg, 'phi_approx_terms', 8))
+        for n in range(max(0, terms)):
+            scale = (1.0 / self._phi) ** n
+            delta_p = scale * (float(delta_S) * 0.1)
+            correction += delta_p
+            self._phi_penrose_corrections.append(delta_p)
+
+        pid_output = p_term + i_term + d_term + correction
+
+        # conservative stability brake (placeholder until lambda_max estimation exists)
+        lambda_max = 1.0
+        eps = float(getattr(self.cfg, 'phi_stability_eps', 1e-9))
+        if (self._phi ** 2) >= (1.0 / (abs(lambda_max) + eps)):
+            pid_output *= 0.5
+
+        self._phi_prev_error = error
+        return float(np.clip(pid_output, 0.0, 1.0))
+
     def _compute_biometric_proxy(self, raw_signals: Dict[str, float]) -> Dict[str, float]:
         def _clip01(x: float) -> float:
             return float(np.clip(float(x), 0.0, 1.0))
 
-        out = {
-            "biometric_proxy_mean": 0.75,
-            "biometric_proxy": 0.75,
-            "sensor_consensus": 0.75,
-            "critical_channel_penalty": 0.0,
-            "critical_channel_min": 0.75,
-        }
-
-        if "biometric_proxy" in raw_signals:
-            out["biometric_proxy"] = _clip01(raw_signals.get("biometric_proxy", out["biometric_proxy"]))
-            out["biometric_proxy_mean"] = out["biometric_proxy"]
-
-        if "sensor_consensus" in raw_signals:
-            out["sensor_consensus"] = _clip01(raw_signals.get("sensor_consensus", out["sensor_consensus"]))
-
-        channels = raw_signals.get("biometric_channels", None)
-        if channels is not None:
-            core_values = [_clip01(v) for v in channels]
-        else:
-            core_values = []
-            for key in ("heartbeat_stability", "breath_regularity", "hrv_balance", "eye_tracking_consistency"):
-                if key in raw_signals:
-                    core_values.append(_clip01(raw_signals[key]))
-
-        support_values = []
-        if "tremor_index" in raw_signals:
-            support_values.append(1.0 - _clip01(raw_signals["tremor_index"]))
-        if "stress_index" in raw_signals:
-            support_values.append(1.0 - _clip01(raw_signals["stress_index"]))
-
-        if core_values:
-            robust_core_mean = float(np.mean(core_values))
-            support_mean = float(np.mean(support_values)) if support_values else robust_core_mean
-            biometric_proxy_mean = float(np.clip(0.8 * robust_core_mean + 0.2 * support_mean, 0.0, 1.0))
-
-            if "biometric_proxy" not in raw_signals:
-                out["biometric_proxy"] = biometric_proxy_mean
-            out["biometric_proxy_mean"] = biometric_proxy_mean
-
-            if len(core_values) >= 2 and "sensor_consensus" not in raw_signals:
-                spread = float(np.std(core_values))
-                out["sensor_consensus"] = float(np.clip(1.0 - spread, 0.0, 1.0))
-
-            critical_min = float(min(core_values))
-            out["critical_channel_min"] = critical_min
-
-            penalty = 0.0
-            if out["sensor_consensus"] > 0.97 and biometric_proxy_mean > 0.92 and critical_min < 0.55:
-                penalty = float(np.clip((0.55 - critical_min) * 0.6, 0.0, 0.35))
-            elif critical_min < 0.35:
-                penalty = float(np.clip((0.35 - critical_min) * 0.5, 0.0, 0.35))
-
-            out["critical_channel_penalty"] = penalty
-
-            if penalty > 0.0:
-                out["biometric_proxy"] = float(np.clip(out["biometric_proxy_mean"] - penalty, 0.0, 1.0))
-
-        return out
 
     def interpret(self, S_layers: np.ndarray, delta_S: float, raw_signals: Dict[str, float]) -> Dict[str, Any]:
         self.step += 1
@@ -181,6 +165,13 @@ class MetaProjectionStabilityAdapter:
             float(getattr(self.cfg, "risk_floor", 0.0)),
             float(getattr(self.cfg, "risk_ceiling", 1.0)),
         ))
+
+        # φ-Quasi-PID layer (after trust damping)
+        self.instability_risk = self._apply_quasi_phi_pid(self.instability_risk, delta_S)
+
+
+        # φ-Quasi-PID layer (after trust damping)
+
 
         base_decay = float(getattr(self.cfg, "human_decay_scale", 0.18)) * self.instability_risk
 
