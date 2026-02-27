@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import argparse
 import json
-from collections import defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -51,10 +50,11 @@ def build_summaries(rows: List[Dict[str, Any]]) -> Dict[Tuple[str, str], RunSumm
     by_key: Dict[Tuple[str, str], RunSummary] = {}
 
     for r in rows:
-        run_id = str(r.get("run_id", ""))
-        scenario_id = str(r.get("scenario_id", ""))
+        run_id = str(r.get("run_id", "")).strip()
+        scenario_id = str(r.get("scenario_id", "")).strip()
         if not run_id or not scenario_id:
             continue
+
         key = (run_id, scenario_id)
         if key not in by_key:
             by_key[key] = RunSummary(run_id=run_id, scenario_id=scenario_id)
@@ -91,11 +91,9 @@ def render_md(summaries: Dict[Tuple[str, str], RunSummary]) -> str:
         lines.append("")
         return "\n".join(lines)
 
-    # Table header
     lines.append("| scenario | run_id | status | duration_s | git_commit | dirty | notes |")
     lines.append("|---|---|---:|---:|---|---:|---|")
 
-    # Sort stable: scenario then start time
     items = sorted(
         summaries.values(),
         key=lambda s: (s.scenario_id, s.started_ts if s.started_ts is not None else 0.0),
@@ -106,8 +104,10 @@ def render_md(summaries: Dict[Tuple[str, str], RunSummary]) -> str:
         dur_str = f"{dur:.3f}" if dur is not None else ""
         commit = (s.git_commit or "")[:12]
         dirty = "" if s.git_dirty is None else ("yes" if s.git_dirty else "no")
-        notes = "; ".join(s.notes)[:120]
-        lines.append(f"| {s.scenario_id} | {s.run_id} | {s.status} | {dur_str} | {commit} | {dirty} | {notes} |")
+        notes = "; ".join(s.notes)[:160]
+        lines.append(
+            f"| {s.scenario_id} | {s.run_id} | {s.status} | {dur_str} | {commit} | {dirty} | {notes} |"
+        )
 
     lines.append("")
     return "\n".join(lines)
