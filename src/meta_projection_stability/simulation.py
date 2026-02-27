@@ -173,8 +173,8 @@ def run_simulation(
             delta_S=delta_S,
             raw_signals=raw_signals,
         )
-
         if res["decision"] != "CONTINUE":
+            env.apply_safety_action(res["decision"])
             env.apply_safety_action(res["decision"])
 
         # Feedback into dynamics
