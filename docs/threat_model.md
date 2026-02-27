@@ -1,120 +1,128 @@
-# Threat Model — meta-projection-stability
+# Threat Model — meta-projection-stability (Phase 6)
 
-## 1. Scope
-This threat model covers the **evaluation pipeline** and **safety instrumentation** of the `meta-projection-stability` repository, with emphasis on:
+Status: **Draft (Phase 6 / Step 15)**  
+Scope: **Evaluation harness + telemetry + boundary signalling**, not production deployment.
 
-- **Structured telemetry** (schema-versioned events)
-- **Explicit safety boundaries** (e.g., REVIEW/REFUSE/EMERGENCY_STOP)
-- **Scenario-based evaluation** (baseline vs adversarial)
-- **Reproducibility & provenance** (git commit/dirty, deterministic scenarios)
+## 1) Purpose and Scope
 
-**Out of scope (for now):**
-- Production deployment hardening
-- Networked / multi-tenant execution
-- Cryptographic attestations beyond basic provenance fields
+This document models credible threats against **evaluation integrity** and **safety boundary enforcement** for the `meta-projection-stability` repository.
 
-## 2. System Overview
-### Components
-- **Telemetry Contract:** `src/meta_projection_stability/types.py`
-- **Run State:** `src/meta_projection_stability/state.py`
-- **Scenario Manifests:** `scenarios/*.json` (+ loader)
-- **Runner:** `scripts/eval_runner.py`
-- **Artifacts:** `artifacts/results.jsonl` (JSONL event log), `artifacts/eval_report.md` (derived)
-- **Report Generator:** `scripts/eval_report.py`
+In-scope components (current repo structure):
+- **Telemetry Contract** (`src/meta_projection_stability/types.py`)
+- **Run State snapshotting** (`src/meta_projection_stability/state.py`)
+- **Scenario manifests** (`scenarios/*.json` or equivalent)
+- **Eval runner** (`scripts/eval_runner.py`, `scripts/run_eval_clean.sh`)
+- **Results + validator + report** (`artifacts/results.jsonl`, `scripts/validate_results.py`, `artifacts/eval_report.md`)
+- **CI eval gate** (`.github/workflows/eval.yml`)
 
-### Data Flow (high level)
-1) `eval_runner` loads `ScenarioManifest`  
-2) Initializes `RunProvenance` + `RunState`  
-3) Emits JSONL telemetry events to `artifacts/results.jsonl`  
-4) `eval_report` aggregates JSONL into `artifacts/eval_report.md`
+Out-of-scope (for now):
+- Full production deployment / external API service hardening
+- Cryptographic signing / HSM key management (tracked as future work)
+- Formal verification (TLA+/Coq) beyond lightweight invariants (tracked as future work)
 
-## 3. Assets & Security Objectives
-### Assets
-- **A1: Telemetry integrity** — events reflect what actually happened
-- **A2: Provenance quality** — runs are attributable to a commit + reproducible scenario
-- **A3: Boundary correctness** — safety boundaries trigger reliably and are logged
-- **A4: Evaluation comparability** — scenarios are comparable across commits
+Security goals:
+- **G1: Reproducibility** — same scenario + code + seed ⇒ comparable outputs
+- **G2: Provenance** — every run is attributable (commit, scenario id, tool version)
+- **G3: Boundary credibility** — explicit boundary events cannot be silently suppressed
+- **G4: Evaluation integrity** — results cannot be trivially forged without detection
+- **G5: Safe failure** — malformed inputs degrade safely (REVIEW / EMERGENCY_STOP)
 
-### Security / Safety Objectives
-- **O1:** Prevent silent failure (missing boundary triggers, missing events)
-- **O2:** Detect regressions in boundary behavior or metrics
-- **O3:** Maintain deterministic evaluation under scenario + seed control
-- **O4:** Avoid over-claiming: keep safety limitations explicit (see Non-Goals)
+Non-goals (summary; detailed in `docs/non_goals.md` later):
+- Preventing a determined attacker with full repo write access
+- Defending against kernel/host compromise
+- Guaranteeing correctness of the underlying scientific model (this is evaluation infra)
 
-## 4. Assumptions
-- Local developer execution (single user, trusted environment)
-- `artifacts/` may be ignored in git; results can be regenerated
-- Scenario manifests are treated as *inputs* and may be adversarial or malformed
-- No secrets are stored in telemetry
+## 2) Assets
 
-## 5. Threat Actors
-- **TA1:** Accidental developer error (misconfiguration, partial edits, wrong file paths)
-- **TA2:** Malicious contributor (PR introduces misleading telemetry or disables boundaries)
-- **TA3:** Adversarial scenario author (malformed manifests, extreme parameters)
-- **TA4:** Tooling/environment drift (Python version differences, dependency changes)
+Primary assets we protect:
+- **A1: Telemetry stream correctness** (event types, ordering, required fields)
+- **A2: Boundary signals** (e.g., REFUSE/REVIEW/EMERGENCY_STOP) and their triggers
+- **A3: Scenario definitions** (inputs/parameters that define comparisons)
+- **A4: Results** (`results.jsonl`) + **validator acceptance criteria**
+- **A5: Provenance metadata** (git commit, dirty flag, environment fingerprint)
+- **A6: CI gate outcome** (pass/fail as a policy enforcement mechanism)
 
-## 6. Attack Surfaces
-- **AS1:** Scenario manifest parsing (`scenarios/*.json`)
-- **AS2:** Telemetry writer / schema drift (`results.jsonl`)
-- **AS3:** Boundary signaling (logic that sets `BoundarySignal`)
-- **AS4:** Runner CLI + defaults (`scripts/eval_runner.py`)
-- **AS5:** Report aggregation (mis-parsing, silent truncation)
+## 3) Trust Boundaries and Data Flows
 
-## 7. Threats, Failure Modes, and Mitigations
+### Trust boundary TB1 — Scenario input boundary
+Untrusted:
+- scenario manifest files (could be malformed / adversarial)
+Trusted:
+- schema validation + defaulting + explicit allowlist of scenario keys
 
-### T1 — Schema drift / incompatible telemetry
-**Failure mode:** event fields change silently; report breaks or misreads.  
-**Mitigations:**
-- Version field: `TELEMETRY_SCHEMA_VERSION`
-- Additive-only changes; keep top-level keys stable
-- Report parser tolerant to missing fields
-- Regression checks (later): validate schema per line
+### Trust boundary TB2 — Runtime signal boundary (adapter/runner)
+Untrusted:
+- raw signals passed into adapter/interpret layer (NaN/Inf/out-of-range, weird types)
+Trusted:
+- sanitization + clipping + explicit “invalid → boundary event” behavior
 
-### T2 — Missing provenance / irreproducible runs
-**Failure mode:** cannot attribute a run to a commit or environment.  
-**Mitigations:**
-- `RunProvenance` includes `git_commit`, `git_dirty`, python/platform
-- Runner always emits RUN_START with provenance payload
+### Trust boundary TB3 — Results boundary (filesystem / artifacts)
+Untrusted:
+- artifacts directory contents
+Trusted:
+- validator rules + deterministic formatting + CI re-generation of “fresh” results
 
-### T3 — Boundary not triggered or not logged
-**Failure mode:** safety boundary logic triggers but telemetry does not record it; or vice versa.  
-**Mitigations:**
-- Boundary recorded in `RunState.boundaries`
-- Dedicated `BOUNDARY` events (explicit event type)
-- Report surfaces triggered boundary names per run
+### Trust boundary TB4 — CI boundary
+Untrusted:
+- PR author environment
+Trusted:
+- GitHub Actions runner environment, pinned workflow, reproducible install
 
-### T4 — Scenario manipulation / malformed inputs
-**Failure mode:** scenario files missing required fields, wrong types, or extreme overrides causing undefined behavior.  
-**Mitigations:**
-- Loader performs light validation (`ScenarioManifestError`)
-- Keep overrides as data; apply in controlled layer (runner)
-- Add later: allowlist of overridable config keys
+Data flow summary:
+scenario manifest → eval_runner → adapter/state → telemetry events → results.jsonl → validate_results → eval_report → CI gate
 
-### T5 — “Telemetry forgery” by malicious code changes
-**Failure mode:** code emits “ok” metrics despite failures; hides boundaries.  
-**Mitigations:**
-- Make boundary logic explicit and centrally tested
-- Add later: minimal invariants tests (e.g., RUN_START/END must exist per run_id)
-- Add later: cross-check state transitions vs emitted events
+## 4) Threats (STRIDE)
 
-### T6 — Report misinterpretation / silent truncation
-**Failure mode:** report ignores some runs or merges runs incorrectly.  
-**Mitigations:**
-- Grouping by `(run_id, scenario_id)`
-- Show table of all runs + latest-per-scenario comparison
-- Add later: include count of parsed lines vs written lines
+Legend:
+- Impact: Low / Med / High
+- Likelihood: Low / Med / High
+- Detection: how we expect to catch it today
 
-## 8. Abuse Cases (Adversarial Reasoning)
-- **AC1:** Disable boundaries under stress inputs → must be detectable via comparison baseline vs adversarial
-- **AC2:** Inflate metrics to hide regressions → require metrics + boundaries to be consistent with state log
-- **AC3:** Create malformed manifest to crash evaluation → loader must fail fast with clear error
+| ID | STRIDE | Threat | Asset(s) | Impact | Likelihood | Current controls | Gaps / Planned mitigations |
+|---:|:------:|--------|----------|:------:|:----------:|------------------|----------------------------|
+| T01 | S | Scenario spoofing (claim baseline but run different params) | A3,A4,A5 | High | Med | scenario_id in results; validator requires scenarios | Add scenario hash + manifest canonicalization |
+| T02 | T | Results tampering (edit `results.jsonl`) | A4,A6 | High | Med | CI regenerates fresh results; validator checks structure | Add append-only signed log (future) |
+| T03 | R | Repudiation of runs (“not my run”) | A5 | Med | Med | git commit + dirty flag | Add environment fingerprint + tool version pin |
+| T04 | I | Leak of sensitive local paths / env | A5 | Low | Med | keep metadata minimal | Redact absolute paths; avoid dumping env vars |
+| T05 | D | DoS via huge scenario / runaway loop | A1,A6 | Med | Med | n_steps bounded; timeouts in CI | Add explicit per-scenario max runtime + hard timeout |
+| T06 | E | Privilege escalation via command injection in runner | A6 | High | Low | avoid shell eval; fixed scripts | Audit runner; never interpolate untrusted strings |
+| T07 | T | Boundary suppression (emit no boundary event) | A2,A6 | High | Med | validator can require boundary events in adversarial scenario | Tighten validator invariants: required event ordering |
+| T08 | T | Telemetry schema drift (silent breaking change) | A1,A6 | High | Med | typed contract; import smoke tests | Add versioned schema + regression snapshots |
+| T09 | D | NaN/Inf poisoning in interpret() | A2,A4 | High | Med | partial clipping | Add input sanitation: finite checks → boundary event |
+| T10 | S/T | Scenario manifest trick: path traversal / unintended file read | A3,A6 | High | Low | manifests should be data-only | Ensure manifests cannot reference filesystem paths |
 
-## 9. Residual Risk
-- Local environment is not hardened; a malicious local actor can always tamper with artifacts.
-- Without cryptographic signing, telemetry integrity is “best effort” (provenance only).
-- Boundary logic correctness depends on model integration (future step).
+## 5) Top Risks (Prioritized)
 
-## 10. Next Steps (links)
-- Safety Case: `docs/safety_case.md` (claims/arguments/evidence)
-- Non-Goals: `docs/non_goals.md`
-- Evaluation Protocol: define pass/fail criteria and regression gates
+1) **Evaluation integrity bypass** (T01/T02/T07/T08)  
+   Why: undermines the entire “safety engineering candidate” claim.
+2) **NaN/Inf poisoning** (T09)  
+   Why: causes undefined behavior and false safety confidence.
+3) **DoS via adversarial scenario** (T05)  
+   Why: blocks CI gate and slows iteration.
+
+## 6) Mitigations Roadmap (mapped to Phases)
+
+Immediate (Phase 5/6 adjacent):
+- Enforce **scenario manifest schema** + canonical JSON and hash in results (T01)
+- Strengthen validator: enforce **required event counts + ordering** (T07/T08)
+- Add **finite checks** (NaN/Inf) in adapter interpret layer → boundary event (T09)
+
+Next (Phase 6+):
+- Add append-only **signed audit log** (T02/T03)
+- Add dependency pinning + SBOM + Dependabot (supply-chain)
+- Formalize invariants (TLA+) for “axiom lock” / boundary state machine
+
+## 7) Evidence Hooks (What we can show auditors)
+
+- Telemetry contract types: `src/meta_projection_stability/types.py`
+- Run snapshot: `src/meta_projection_stability/state.py`
+- Deterministic run metadata in results: commit, dirty, scenario_id
+- Validator acceptance criteria: `scripts/validate_results.py`
+- CI enforcement: `.github/workflows/eval.yml`
+
+## 8) Assumptions
+
+- Adversary can modify scenario manifests in PRs, but cannot bypass CI checks once required.
+- CI runner environment is trusted (no host compromise).
+- Threat model focuses on **integrity/credibility** of evaluation, not on production security.
+
