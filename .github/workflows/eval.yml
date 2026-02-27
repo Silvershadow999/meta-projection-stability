@@ -24,6 +24,7 @@ jobs:
           python -m pip install --upgrade pip
           # Prefer editable install from pyproject (works with src-layout)
           pip install -e .
+          pip install pytest pytest-cov
           pip install cyclonedx-bom
           # If you rely on requirements.txt too, uncomment:
           # pip install -r requirements.txt
@@ -38,6 +39,7 @@ jobs:
         run: |
           mkdir -p artifacts
           cyclonedx-py --format json --output artifacts/sbom.json
+            coverage.xml
 
 - name: Upload evaluation artifacts
         if: always()
