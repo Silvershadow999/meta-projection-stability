@@ -1,0 +1,13 @@
+{
+  "scenario_id": "adversarial_min",
+  "name": "Adversarial Minimal",
+  "description": "For boundary handling + telemetry robustness under perturbations.",
+  "seed": 1337,
+  "config_overrides": {
+    "enable_plot": false
+  },
+  "tags": {
+    "tier": "p0",
+    "kind": "adversarial"
+  }
+}
