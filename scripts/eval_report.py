@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 """
-eval_report.py — Phase 5 report generator (repo-safe)
+eval_report.py — Phase 5 report generator (Phase 5c)
 
 Reads artifacts/results.jsonl and produces artifacts/eval_report.md.
 
-- stdlib only
-- resilient parsing (missing keys tolerated)
-- groups by run_id + scenario_id
+Enhancements:
+- consumes METRIC events (duration_s, n_steps, event counts)
+- consumes BOUNDARY events (list of triggered boundary names)
+- scenario comparison section (last run per scenario)
 """
 
 from __future__ import annotations
@@ -22,14 +23,28 @@ from typing import Any, Dict, List, Optional, Tuple
 class RunSummary:
     run_id: str
     scenario_id: str
+
     started_ts: Optional[float] = None
     ended_ts: Optional[float] = None
+
     git_commit: Optional[str] = None
     git_dirty: Optional[bool] = None
+
     status: str = "unknown"
     notes: List[str] = field(default_factory=list)
 
-    def duration_s(self) -> Optional[float]:
+    # From METRIC event
+    duration_s: Optional[float] = None
+    n_steps: Optional[int] = None
+    step_events: Optional[int] = None
+    boundary_events: Optional[int] = None
+
+    # From BOUNDARY events
+    triggered_boundaries: List[str] = field(default_factory=list)
+
+    def duration_fallback(self) -> Optional[float]:
+        if self.duration_s is not None:
+            return self.duration_s
         if self.started_ts is None or self.ended_ts is None:
             return None
         return float(self.ended_ts) - float(self.started_ts)
@@ -58,8 +73,8 @@ def build_summaries(rows: List[Dict[str, Any]]) -> Dict[Tuple[str, str], RunSumm
         key = (run_id, scenario_id)
         if key not in by_key:
             by_key[key] = RunSummary(run_id=run_id, scenario_id=scenario_id)
-
         s = by_key[key]
+
         et = r.get("event_type")
         ts = r.get("ts_utc_s")
 
@@ -68,6 +83,7 @@ def build_summaries(rows: List[Dict[str, Any]]) -> Dict[Tuple[str, str], RunSumm
             prov = (((r.get("payload") or {}).get("provenance")) or {})
             s.git_commit = prov.get("git_commit")
             s.git_dirty = prov.get("git_dirty")
+
         elif et == "run_end":
             s.ended_ts = ts
             summ = ((r.get("payload") or {}).get("summary")) or {}
@@ -76,40 +92,100 @@ def build_summaries(rows: List[Dict[str, Any]]) -> Dict[Tuple[str, str], RunSumm
             if isinstance(note, str) and note:
                 s.notes.append(note)
 
+        elif et == "metric":
+            m = r.get("metrics") or {}
+            # tolerant parsing
+            if "duration_s" in m:
+                try:
+                    s.duration_s = float(m["duration_s"])
+                except Exception:
+                    pass
+            if "n_steps" in m:
+                try:
+                    s.n_steps = int(float(m["n_steps"]))
+                except Exception:
+                    pass
+            if "step_events" in m:
+                try:
+                    s.step_events = int(float(m["step_events"]))
+                except Exception:
+                    pass
+            if "boundary_events" in m:
+                try:
+                    s.boundary_events = int(float(m["boundary_events"]))
+                except Exception:
+                    pass
+
+        elif et == "boundary":
+            b = r.get("boundary") or {}
+            name = b.get("name")
+            if isinstance(name, str) and name:
+                if name not in s.triggered_boundaries:
+                    s.triggered_boundaries.append(name)
+
     return by_key
 
 
-def render_md(summaries: Dict[Tuple[str, str], RunSummary]) -> str:
+def _md_table(summaries: List[RunSummary]) -> List[str]:
+    lines: List[str] = []
+    lines.append("| scenario | run_id | status | duration_s | n_steps | boundaries | git_commit | dirty | notes |")
+    lines.append("|---|---|---:|---:|---:|---|---|---:|---|")
+
+    for s in summaries:
+        dur = s.duration_fallback()
+        dur_str = f"{dur:.3f}" if dur is not None else ""
+        n_steps = "" if s.n_steps is None else str(s.n_steps)
+        bounds = ", ".join(s.triggered_boundaries) if s.triggered_boundaries else ""
+        commit = (s.git_commit or "")[:12]
+        dirty = "" if s.git_dirty is None else ("yes" if s.git_dirty else "no")
+        notes = "; ".join(s.notes)[:160]
+        lines.append(
+            f"| {s.scenario_id} | {s.run_id} | {s.status} | {dur_str} | {n_steps} | {bounds} | {commit} | {dirty} | {notes} |"
+        )
+    return lines
+
+
+def render_md(by_key: Dict[Tuple[str, str], RunSummary]) -> str:
     lines: List[str] = []
     lines.append("# Evaluation Report")
     lines.append("")
     lines.append("Generated from `artifacts/results.jsonl`.")
     lines.append("")
 
-    if not summaries:
+    if not by_key:
         lines.append("_No runs found._")
         lines.append("")
         return "\n".join(lines)
 
-    lines.append("| scenario | run_id | status | duration_s | git_commit | dirty | notes |")
-    lines.append("|---|---|---:|---:|---|---:|---|")
-
-    items = sorted(
-        summaries.values(),
+    # All runs table (stable order)
+    all_runs = sorted(
+        by_key.values(),
         key=lambda s: (s.scenario_id, s.started_ts if s.started_ts is not None else 0.0),
     )
 
-    for s in items:
-        dur = s.duration_s()
-        dur_str = f"{dur:.3f}" if dur is not None else ""
-        commit = (s.git_commit or "")[:12]
-        dirty = "" if s.git_dirty is None else ("yes" if s.git_dirty else "no")
-        notes = "; ".join(s.notes)[:160]
-        lines.append(
-            f"| {s.scenario_id} | {s.run_id} | {s.status} | {dur_str} | {commit} | {dirty} | {notes} |"
-        )
-
+    lines.append("## Runs")
     lines.append("")
+    lines.extend(_md_table(all_runs))
+    lines.append("")
+
+    # Scenario comparison: last run per scenario
+    last_by_scenario: Dict[str, RunSummary] = {}
+    for s in all_runs:
+        prev = last_by_scenario.get(s.scenario_id)
+        if prev is None:
+            last_by_scenario[s.scenario_id] = s
+        else:
+            # choose later end time if available
+            prev_t = prev.ended_ts if prev.ended_ts is not None else prev.started_ts
+            cur_t = s.ended_ts if s.ended_ts is not None else s.started_ts
+            if (cur_t or 0.0) >= (prev_t or 0.0):
+                last_by_scenario[s.scenario_id] = s
+
+    lines.append("## Scenario Comparison (latest run per scenario)")
+    lines.append("")
+    lines.extend(_md_table(sorted(last_by_scenario.values(), key=lambda s: s.scenario_id)))
+    lines.append("")
+
     return "\n".join(lines)
 
 
@@ -126,8 +202,8 @@ def main() -> int:
         raise SystemExit(f"Input not found: {inp}")
 
     rows = read_jsonl(inp)
-    summaries = build_summaries(rows)
-    md = render_md(summaries)
+    by_key = build_summaries(rows)
+    md = render_md(by_key)
 
     outp.parent.mkdir(parents=True, exist_ok=True)
     outp.write_text(md, encoding="utf-8")
