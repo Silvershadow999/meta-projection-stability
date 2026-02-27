@@ -1,6 +1,5 @@
 #### 2. requirements.txt
 
-```text
 numpy>=1.24
 matplotlib>=3.7
 scipy>=1.10               # optional, but useful for stats
