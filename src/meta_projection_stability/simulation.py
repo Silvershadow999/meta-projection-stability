@@ -169,13 +169,15 @@ def run_simulation(
         }
 
         res = stability.interpret(
-            S_layers=S[:, t],
+            S_layers=S_layers[:, t],
             delta_S=delta_S,
-            raw_signals=raw_signals
+            raw_signals=raw_signals,
         )
 
-        # Feedback into dynamics
         if res["decision"] != "CONTINUE":
+            env.apply_safety_action(res["decision"])
+
+        # Feedback into dynamics
             O[t] *= 0.92
             A[t] *= 0.92
 
