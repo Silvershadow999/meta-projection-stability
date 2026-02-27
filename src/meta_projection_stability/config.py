@@ -39,7 +39,6 @@ class MetaProjectionStabilityConfig:
     risk_warn: float = 0.65
     risk_floor: float = 0.00
     risk_ceiling: float = 1.00
-    risk_clip_max: float = 1.00
     min_risk_for_decay: float = 0.05
 
     # ─── Trust & Human Significance ────────────────────────────────────
@@ -87,18 +86,18 @@ class MetaProjectionStabilityConfig:
     globalsense_scale: float = 1.0
 
     # ─── Erweiterte Dynamics / Adapter-Kompatibilität ─────────────────
-    negative_delta_is_risky: bool = True
-    risk_trust_damping_max: float = 0.35
     risk_clip_max: float = 1.00
     ema_alpha_risk: float = 0.12
-    ema_alpha_human: float = 0.09
-    human_sig_max: float = 1.10
+
+    # ─── Quasi-Phi-PID (Spec-Integration) ─────────────────────────────
+    phi_pid_enabled: bool = True
+    phi_kp: float = 1.618      # φ
+    phi_ki: float = 0.618      # 1/φ
+    phi_kd: float = 2.618      # φ²
+    phi_approx_terms: int = 8  # finite aperiodic correction terms
+    phi_stability_eps: float = 1e-9
 
     # ─── Adapter dynamics (required by adapter.py) ────────────────────
-    human_decay_scale: float = 0.10
-    recovery_trust_power: float = 1.00
-    transition_decay_factor: float = 0.65
-    cooldown_human_recovery_step: float = 0.02
 
     # ─── Biometric fusion / Mutuality (Phase A/B) ─────────────────────
     use_biometric_fusion: bool = True
