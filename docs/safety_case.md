@@ -116,6 +116,10 @@ See `docs/non_goals.md` once present (planned).
 - Add CI regression gate comparing scenario metrics/boundaries across commits
 - Integrate real model execution under a well-defined hook with bounded runtime
 
+## Evidence
+
+- **E6:** Control stability condition for φ-Quasi-PID: `docs/control_stability_phi_pid.md`
+
 ## 6. Traceability Links
 - Threat Model: `docs/threat_model.md`
 - Non-Goals: `docs/non_goals.md` (planned)
