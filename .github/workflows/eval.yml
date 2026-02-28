@@ -34,7 +34,7 @@ jobs:
         if: always()
         run: |
           mkdir -p artifacts
-          cyclonedx-bom environment --format json --output artifacts/sbom.json
+          cyclonedx-py environment --format json --output artifacts/sbom.json
 
       - name: Upload evaluation artifacts
         if: always()
@@ -46,3 +46,4 @@ jobs:
             artifacts/eval_report.md
             artifacts/summary.json
             artifacts/sbom.json
+python -m pip install cyclonedx-py
