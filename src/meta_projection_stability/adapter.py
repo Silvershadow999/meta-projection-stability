@@ -251,7 +251,7 @@ class MetaProjectionStabilityAdapter:
                 self._regime_counts["critical_instability_reset"] += 1
 
             elif self.instability_risk <= risk_recovery_threshold:
-                recovery_boost = recovery_bonus * nominal_recovery_boost_factor
+                recovery_boost = recovery_bonus
                 self.human_significance = float(min(human_sig_max, self.human_significance + recovery_boost))
                 status = "nominal"
                 decision = "CONTINUE"
@@ -312,17 +312,8 @@ class MetaProjectionStabilityAdapter:
         self.human_significance = float(np.clip(self.human_significance, 0.0, human_sig_max))
 
         if decision != "AXIOM_ZERO_LOCK":
-            self.human_ema = float(
-                float(getattr(self.cfg, "ema_alpha_human", 0.09)) * self.human_significance +
-                (1.0 - float(getattr(self.cfg, "ema_alpha_human", 0.09))) * self.human_ema
-            )
-
-        if self.human_significance <= 0.0 or self.human_significance >= human_sig_max:
-            self._sat_counts["human_sig_clamped"] += 1
-        if self.trust_level <= trust_floor or self.trust_level >= trust_ceiling:
-            self._sat_counts["trust_clamped"] += 1
-        if self.raw_instability_risk <= 0.0 or self.raw_instability_risk >= float(getattr(self.cfg, "risk_clip_max", 1.0)):
-            self._sat_counts["risk_clamped"] += 1
+            alpha = float(getattr(self.cfg, "ema_alpha_human", 0.09))
+            self.human_ema = float(alpha * self.human_significance + (1.0 - alpha) * self.human_ema)
 
         self._last_reason = status
         self._last_decision = decision

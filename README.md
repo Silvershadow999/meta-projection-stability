@@ -742,3 +742,11 @@ print("README.md written successfully.")
 
 
 
+
+## Evaluation (Reproducible, CI-gated)
+
+Local run (rotates old logs, runs baseline + adversarial, validates invariants, generates report):
+
+```bash
+./scripts/run_eval_clean.sh
+python scripts/validate_results.py

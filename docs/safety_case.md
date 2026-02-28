@@ -1,122 +1,181 @@
-# Safety Case — meta-projection-stability (CAE)
+# Safety Case — meta-projection-stability (Phase 6)
 
-## 0. Purpose
-This document provides a **structured Safety Case** using a **Claim–Argument–Evidence (CAE)** format.
-It is focused on the repository’s role as a **safety-engineering / evaluation candidate**:
+Status: **Draft (Phase 6 / Step 16)**  
+Safety intent: Make evaluation outputs **credible**, **reproducible**, and **boundary-explicit** under adversarial scenarios.
 
-- structured telemetry
-- explicit safety boundaries
-- scenario-based comparison (baseline vs adversarial)
-- reproducibility + provenance
-- measurable outputs suitable for regression gating
-
-## 1. Context and Intended Use
-### Intended use (current)
-- Local evaluation tool to run defined scenarios and emit telemetry to a JSONL log
-- Produce a human-readable evaluation report for comparison across commits
-
-### Not intended (current)
-See `docs/non_goals.md` once present (planned).
-
-## 2. Top-Level Claim (C0)
-**C0:** The evaluation pipeline provides **credible, reproducible, and auditable safety telemetry** such that boundary behavior and key evaluation metrics can be compared across scenarios and commits.
-
-### Acceptance Criteria for C0 (high-level)
-- Every run emits RUN_START + RUN_END with provenance and scenario metadata
-- The telemetry schema is versioned and stable (additive changes)
-- Boundary triggers are explicit events (BOUNDARY) and are surfaced in reports
-- Scenario manifests define deterministic inputs (id, seed, overrides)
-- Reports include scenario comparison and highlight boundary differences
+This safety case is about **evaluation infrastructure safety** (telemetry integrity, boundary enforcement, scenario comparability) — not a guarantee that any underlying scientific model is correct.
 
 ---
 
-## 3. Subclaims, Arguments, and Evidence
+## 1) System Description
 
-### C1 — Telemetry is structured and schema-versioned
-**Claim (C1):** Telemetry events follow a stable schema with explicit versioning.
+`meta-projection-stability` is an evaluation harness that:
+- runs **scenarios** (baseline vs adversarial),
+- produces **structured telemetry events**,
+- emits **explicit safety boundary signals** (e.g., REVIEW / REFUSE / EMERGENCY_STOP),
+- writes **results** in machine-checkable form (`results.jsonl`),
+- validates outputs via a **validator**, and
+- enforces minimum quality via **CI gates**.
 
-**Argument (A1):**
-- A single contract defines event types, severity, and event payload shape.
-- Schema version enables controlled evolution and backward compatibility.
+Primary components:
+- Telemetry contract: `src/meta_projection_stability/types.py`
+- Run state snapshot: `src/meta_projection_stability/state.py`
+- Scenario manifests: `scenarios/*`
+- Runner: `scripts/eval_runner.py` + `scripts/run_eval_clean.sh`
+- Validator/report: `scripts/validate_results.py`, `artifacts/eval_report.md`
+- CI gate: `.github/workflows/eval.yml`
 
-**Evidence (E1):**
+---
+
+## 2) Top-Level Claim (C0)
+
+**C0:** The repository provides a **credible safety-evaluation pipeline** such that:
+1) runs are reproducible and attributable (provenance),
+2) safety boundary conditions are explicit and machine-checkable,
+3) scenario comparisons are meaningful and regression-detectable,
+4) failures degrade safely (REVIEW/EMERGENCY_STOP), not silently.
+
+---
+
+## 3) Context, Assumptions, and Non-Goals
+
+### Context
+We are building a “serious safety-engineering candidate” evaluation harness:
+- emphasis on **structured telemetry**, **explicit safety boundaries**, **adversarial reasoning**, and **measurable outputs**.
+
+### Assumptions (A*)
+- **A1:** CI runner environment is trusted (no host compromise).
+- **A2:** PR authors may attempt to weaken evaluation integrity; required checks must catch it.
+- **A3:** Scenario definitions are treated as untrusted inputs and must be validated.
+- **A4:** This is not production deployment security.
+
+### Non-goals (N*)
+- **N1:** Preventing malicious maintainers with write access.
+- **N2:** Proving scientific correctness of the modeled phenomenon.
+- **N3:** Cryptographic signing / key custody (planned later).
+
+(Non-goals will be expanded in `docs/non_goals.md`.)
+
+---
+
+## 4) Argument Structure (Goal Structuring)
+
+### Strategy S0
+Decompose C0 into **four subclaims** with objective evidence:
+- **C1 Reproducibility & Provenance**
+- **C2 Telemetry Integrity**
+- **C3 Boundary Credibility**
+- **C4 Scenario Comparison & Regression**
+
+---
+
+## 5) Subclaims and Evidence
+
+### C1 — Reproducibility & Provenance
+**Claim:** Runs are attributable and comparable across time.
+
+**Evidence:**
+- E1.1: Run metadata recorded (scenario_id, run_id, git commit, dirty flag) in results
+- E1.2: Deterministic run harness (`scripts/run_eval_clean.sh`) produces “fresh” results
+- E1.3: CI re-runs evaluation and validates the produced artifacts (`.github/workflows/eval.yml`)
+
+**Implementation hooks:**
+- `scripts/eval_runner.py`
+- `scripts/run_eval_clean.sh`
+- `.github/workflows/eval.yml`
+
+**Residual risk / gaps:**
+- G1: Add canonical manifest hash in results (planned)
+- G2: Add environment fingerprint (planned)
+
+---
+
+### C2 — Telemetry Integrity
+**Claim:** Telemetry outputs follow a versioned contract and are machine-validated.
+
+**Evidence:**
+- E2.1: Telemetry event types are explicit and structured (contract types)
+- E2.2: Validator checks structural invariants on emitted events and per-scenario presence
+
+**Implementation hooks:**
 - `src/meta_projection_stability/types.py`
-  - `TELEMETRY_SCHEMA_VERSION`
-  - `TelemetryEvent`, `BoundarySignal`, enums `EventType`, `Severity`
+- `scripts/validate_results.py`
+
+**Residual risk / gaps:**
+- G3: Tighten ordering invariants (e.g., RUN_START precedes STEP/METRIC; RUN_END last)
+- G4: Schema version pinning + regression snapshots (planned)
 
 ---
 
-### C2 — Runs are reproducible and attributable (provenance)
-**Claim (C2):** Each run can be attributed to code state and environment context, enabling reproducibility.
+### C3 — Boundary Credibility (Explicit Safety Boundaries)
+**Claim:** Safety boundaries are explicit signals and cannot be silently omitted in required scenarios.
 
-**Argument (A2):**
-- Runs capture git commit hash + dirty state + Python/platform info in RUN_START payload.
-- Scenario manifests provide deterministic seeds and configuration overrides.
+**Evidence:**
+- E3.1: Boundary events exist as explicit telemetry events
+- E3.2: Validator can require boundary presence for adversarial scenarios
+- E3.3: Eval report summarizes boundary triggers per scenario (human-auditable)
 
-**Evidence (E2):**
-- `RunProvenance` in `src/meta_projection_stability/types.py`
-- `scripts/eval_runner.py` (RUN_START payload includes provenance)
-- `scenarios/*.json` (+ loader)
+**Implementation hooks:**
+- `src/meta_projection_stability/types.py`
+- `scripts/validate_results.py`
+- `artifacts/eval_report.md` (generated)
 
----
-
-### C3 — Safety boundaries are explicit, logged, and reviewable
-**Claim (C3):** Safety boundaries are explicit signals and produce auditable telemetry.
-
-**Argument (A3):**
-- Boundaries are represented as `BoundarySignal` and stored in `RunState`.
-- Boundaries are emitted as dedicated `BOUNDARY` telemetry events.
-
-**Evidence (E3):**
-- `src/meta_projection_stability/state.py` (`RunState.boundaries`)
-- `scripts/eval_runner.py` (emits `EventType.BOUNDARY`)
-- `artifacts/results.jsonl` (contains boundary lines when triggered)
-- `scripts/eval_report.py` (extracts boundary names into report)
+**Residual risk / gaps:**
+- G5: Make “boundary suppression” impossible to pass validator (stronger rules)
+- G6: Append-only signed audit log (future)
 
 ---
 
-### C4 — Scenario comparison supports adversarial reasoning
-**Claim (C4):** The evaluation pipeline supports scenario-based comparison, including adversarial reasoning.
+### C4 — Scenario Comparison & Regression Detection
+**Claim:** The pipeline supports meaningful scenario comparisons and regression detection.
 
-**Argument (A4):**
-- Scenarios are defined as data and executed consistently.
-- Reports compare latest run per scenario, enabling “baseline vs adversarial” inspection.
+**Evidence:**
+- E4.1: Scenarios identified and compared in report summary
+- E4.2: Validator requires scenario coverage (baseline + adversarial minimum set)
+- E4.3: CI gate fails on missing scenarios / malformed output
 
-**Evidence (E4):**
-- `src/meta_projection_stability/scenario_manifest.py` (loader + validation)
-- `scripts/eval_report.py` (“Scenario Comparison” section)
-- `scenarios/baseline.json` vs `scenarios/adversarial_min.json`
+**Implementation hooks:**
+- `scenarios/*`
+- `scripts/validate_results.py`
+- `.github/workflows/eval.yml`
 
----
-
-### C5 — Regression readiness (measurable outputs)
-**Claim (C5):** Outputs are suitable for regression gating (future CI step), because they are machine-readable and stable.
-
-**Argument (A5):**
-- JSONL logs are append-only and structured.
-- The report is derived, reproducible, and can be regenerated from JSONL.
-- Metrics/boundaries are explicitly captured.
-
-**Evidence (E5):**
-- `artifacts/results.jsonl` format (generated by runner)
-- `scripts/eval_report.py` derives `artifacts/eval_report.md`
+**Residual risk / gaps:**
+- G7: Scenario schema + canonicalization + hash
+- G8: Add regression thresholds (numerical deltas) once simulation outputs stabilize
 
 ---
 
-## 4. Residual Risks and Limitations (current)
-- Telemetry integrity is “best effort” without cryptographic signing.
-- Runner currently uses a skeleton loop; model integration may introduce new failure modes.
-- Report parsing is tolerant; strict schema validation is a planned hardening step.
+## 6) Safety Requirements (SR*)
 
-## 5. Planned Hardening (next steps)
-- Add a schema validator + invariants test:
-  - Each run_id must have RUN_START and RUN_END
-  - METRIC must exist if n_steps > 0
-- Add explicit allowlist for scenario `config_overrides`
-- Add CI regression gate comparing scenario metrics/boundaries across commits
-- Integrate real model execution under a well-defined hook with bounded runtime
+- **SR1:** Results must include provenance: scenario_id, run_id, commit, dirty flag.
+- **SR2:** Telemetry must include at least: RUN_START, RUN_END, STEP events, METRIC events.
+- **SR3:** Boundary events must be emitted when boundary conditions are triggered.
+- **SR4:** Validator must reject malformed or incomplete runs (fail closed).
+- **SR5:** CI must enforce SR1–SR4 for PRs into protected branches.
 
-## 6. Traceability Links
-- Threat Model: `docs/threat_model.md`
-- Non-Goals: `docs/non_goals.md` (planned)
-- Evaluation Protocol: (planned in docs + runner flags)
+(These are enforced partially today; completion is tracked in “Gaps”.)
+
+---
+
+## 7) Audit Procedure (How an external reviewer verifies C0)
+
+1) Inspect contract types: `src/meta_projection_stability/types.py`
+2) Run local eval:
+   - `scripts/run_eval_clean.sh`
+3) Validate:
+   - `python scripts/validate_results.py --in artifacts/results_fresh.jsonl --require-scenarios baseline,adversarial_min`
+4) Check report:
+   - `artifacts/eval_report.md` includes scenario comparison and boundaries
+5) Verify CI gate:
+   - `.github/workflows/eval.yml` runs runner + validator + report generation
+
+---
+
+## 8) Known Gaps / Future Work (tracked)
+
+- Formal verification of axiom-lock / boundary state machine (TLA+)
+- Dependency pinning + SBOM + Dependabot
+- Input sanitation (NaN/Inf) + rate limiting at adapter boundary
+- Signed append-only audit log for results
+- Regression metrics thresholds (once stable numerical outputs exist)
+

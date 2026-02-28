@@ -10,7 +10,7 @@ readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
     "numpy>=1.24",
-    "matplotlib>=3.7",
+    "matplotlib>=3.7",    "pytest-cov>=4.1",
 ]
 
 [project.optional-dependencies]
@@ -19,3 +19,21 @@ dev = [
     "ruff>=0.3",
     "mypy>=1.10",
 ]
+
+
+[tool.pytest.ini_options]
+addopts = "--import-mode=importlib --cov=meta_projection_stability --cov-report=term-missing --cov-report=xml"
+
+[tool.coverage.run]
+branch = true
+source = ["src/meta_projection_stability"]
+omit = [
+  "tests/*",
+  "scripts/*",
+  "examples/*",
+]
+
+[tool.coverage.report]
+fail_under = 80
+show_missing = true
+skip_covered = false
