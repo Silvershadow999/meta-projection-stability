@@ -11,6 +11,6 @@ def test_level0_axiom_file_exists_and_nonempty():
         root / "axiom_state.json",
     ]
 
-    existing = [p for p in candidates if p.exists()]
+    existing = [c for c in candidates if c.exists()]
     assert existing, f"Expected one of these to exist: {candidates}"
-    assert any(p.stat().st_size > 0 for p in existing), f"All candidates were empty: {existing}"
+    assert any(c.stat().st_size > 0 for c in existing), f"All candidates were empty: {existing}"
