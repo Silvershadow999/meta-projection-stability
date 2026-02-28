@@ -25,7 +25,7 @@ jobs:
 
       - name: Run tests with coverage
         run: |
-          pytest -q --cov=meta_projection_stability --cov-report=term-missing --cov-report=xml
+          pytest -q --cov=meta_projection_stability --cov-report=term-missing --cov-report=xml --cov-fail-under=80
 
       - name: Upload coverage artifacts
         if: always()
