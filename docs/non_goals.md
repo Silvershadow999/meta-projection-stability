@@ -1,48 +1,95 @@
-# Non-Goals — meta-projection-stability
+# Non-Goals — meta-projection-stability (Phase 6)
 
-This document defines explicit **non-goals** to prevent over-claiming and scope creep.
-Anything not listed as an intended capability should be treated as **out of scope** unless added explicitly.
+Status: **Draft (Phase 6 / Step 17)**  
+This document defines what this repository **does not** claim to provide.
 
-## 1. Not a Production Safety System
-- This repository is **not** a production-grade safety controller.
-- It does **not** guarantee real-world safe operation of any physical system.
+---
 
-## 2. No Security Hardening Guarantee
-- No guarantee of resistance against malicious local actors.
-- No cryptographic signing/attestation of telemetry.
-- No secure enclave, hardened runtime, or tamper-proof logging.
+## 1) Not Production Security
 
-## 3. No Claims of Scientific or Physical Validity
-- The framework does not claim to validate or prove physical theories.
-- Outputs are evaluation artifacts, not scientific proof.
+This repository is an **evaluation harness**. It is **not** a hardened production service.
 
-## 4. No Comprehensive Adversarial Coverage
-- “Adversarial scenarios” are limited, curated inputs for evaluation.
-- This does not cover all possible adversarial strategies or failure modes.
+Non-goals:
+- No guarantees against host/kernel compromise
+- No secure multi-tenant isolation
+- No hardened secret storage / HSM integration
+- No production-grade authentication/authorization model
 
-## 5. No General Alignment Guarantee
-- The repository does not claim to solve alignment in general.
-- It provides instrumentation and evaluation structure, not a universal safety solution.
+---
 
-## 6. No Cross-Environment Determinism Guarantee
-- Reproducibility is best-effort via seed/scenario/provenance.
-- Exact bit-for-bit determinism across different OS/CPU/Python builds is not guaranteed.
+## 2) Not a Formal Proof of Correctness
 
-## 7. No Performance / Scalability Guarantees
-- No guarantee for large-scale runs, distributed execution, or high-throughput logging.
-- CI gating and scaling strategies are planned, not guaranteed.
+The repo aims for **measurable evaluation credibility**, not mathematical proof.
 
-## 8. No Hidden Behavior Claims
-- Telemetry only represents what the current code emits.
-- Absence of evidence in logs is not evidence of absence unless explicitly validated by invariants tests.
+Non-goals:
+- No full formal verification (TLA+/Coq/Isabelle) of the system state machine (planned later)
+- No invariant proof that the underlying model is correct
+- No completeness proof of the threat model
 
-## 9. Deferred / Planned (not done yet)
-The following items are planned but are **not** guaranteed to exist unless implemented:
-- Strict telemetry schema validation per event line
-- CI regression gates (pass/fail criteria enforced in CI)
-- Real model execution integration via a bounded runner hook
-- Comprehensive threat mitigation beyond local execution assumptions
+---
 
-## 10. Traceability
-- Threat Model: `docs/threat_model.md`
-- Safety Case: `docs/safety_case.md`
+## 3) Not a Claim of Scientific Validity
+
+The evaluation infrastructure can be strong even if the modeled phenomenon is exploratory.
+
+Non-goals:
+- No claim that “meta projection stability” is a validated scientific theory
+- No claim that φ/quasi-crystal heuristics are physically correct
+- No claim of predictive power beyond documented evaluation protocols
+
+---
+
+## 4) Not Adversary-Resistant Under Maintainer Compromise
+
+If an attacker has repository write access and can change CI rules, they can subvert evaluation.
+
+Non-goals:
+- Defending against malicious maintainers
+- Defending against compromised CI configuration by an authorized actor
+
+Mitigation direction (future):
+- branch protection + required checks + signed commits (policy-level controls)
+
+---
+
+## 5) Not Cryptographically Signed Evidence (Yet)
+
+Current outputs are validated structurally, but not cryptographically signed.
+
+Non-goals (current state):
+- No cryptographic signatures on `results.jsonl` / reports
+- No append-only tamper-evident log with key custody
+
+Planned (future):
+- signed audit log + provenance strengthening
+
+---
+
+## 6) Not Exhaustive Test/Fuzz Coverage (Yet)
+
+We aim to grow coverage, but we do not claim “complete” adversarial testing.
+
+Non-goals (current state):
+- No guarantee of 95%+ coverage at all times
+- No guarantee that fuzzing finds all failure modes
+- No claim of resilience against all malformed inputs
+
+---
+
+## 7) Not a Substitute for External Audit
+
+This repo can support auditability, but does not replace independent review.
+
+Non-goals:
+- No claim that internal CI checks are equivalent to external audit
+- No claim of compliance certifications (OpenSSF, ISO, etc.)
+
+---
+
+## 8) What we DO claim (minimal positive statement)
+
+- Structured telemetry + explicit boundary signaling
+- Reproducible evaluation runs with provenance metadata
+- Validator + CI gate that fails closed on malformed outputs
+- Clear documentation of threats, safety case, and non-goals
+
