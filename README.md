@@ -1,4 +1,4 @@
-readme_content = """# meta-projection-stability
+"""# meta-projection-stability
 
 A compact research / engineering framework for **meta-stability simulation**, **trust-damped control**, **human-significance anchoring**, **biometric proxy evaluation**, **adversarial scenario testing**, and experimental **axiom-bound compatibility logic**.
 
