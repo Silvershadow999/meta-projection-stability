@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import hashlib
 import os
 import subprocess
 import time
@@ -38,6 +39,55 @@ from meta_projection_stability.scenario_manifest import load_by_id, ScenarioMani
 
 ARTIFACTS_DIR_DEFAULT = Path("artifacts")
 RESULTS_JSONL_DEFAULT = ARTIFACTS_DIR_DEFAULT / "results.jsonl"
+
+class HashChainWriter:
+    """
+    Tamper-evident JSONL writer:
+    - adds prev_hash + line_hash to each line
+    - line_hash = sha256(canonical_json_without_line_hash)
+    - prev_hash starts at last line_hash in existing file (if any)
+    """
+    def __init__(self, path: Path):
+        self.path = path
+        self.prev_hash = self._load_prev_hash()
+
+    def _load_prev_hash(self):
+        if not self.path.exists():
+            return None
+        try:
+            # read last non-empty line
+            last = None
+            with self.path.open("r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if line:
+                        last = line
+            if not last:
+                return None
+            obj = json.loads(last)
+            return obj.get("line_hash")
+        except Exception:
+            return None
+
+    @staticmethod
+    def _canonical(obj: dict) -> str:
+        # stable, hashable canonical JSON (no whitespace noise)
+        return json.dumps(obj, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+
+    def append(self, obj: dict) -> None:
+        obj = dict(obj)  # copy
+        obj["prev_hash"] = self.prev_hash
+        # compute hash over object WITHOUT line_hash
+        to_hash = dict(obj)
+        to_hash.pop("line_hash", None)
+        digest = hashlib.sha256(self._canonical(to_hash).encode("utf-8")).hexdigest()
+        obj["line_hash"] = digest
+
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        with self.path.open("a", encoding="utf-8") as f:
+            f.write(json.dumps(obj, ensure_ascii=False) + "\n")
+
+        self.prev_hash = digest
 
 
 def _git(cmd: list[str]) -> Optional[str]:
@@ -65,8 +115,8 @@ def append_jsonl(path: Path, obj: dict) -> None:
         f.write(json.dumps(obj, ensure_ascii=False) + "\n")
 
 
-def emit(out_path: Path, ev: TelemetryEvent) -> None:
-    append_jsonl(out_path, ev.to_dict())
+def emit(writer: HashChainWriter, ev: TelemetryEvent) -> None:
+    writer.append(ev.to_dict())
 
 
 def main() -> int:
@@ -84,6 +134,7 @@ def main() -> int:
         raise SystemExit("--emit-every must be >= 1")
 
     out_path = Path(args.out)
+    writer = HashChainWriter(out_path)
 
     try:
         scenario = load_by_id(args.scenario)
@@ -106,7 +157,7 @@ def main() -> int:
 
     # RUN_START
     emit(
-        out_path,
+        writer,
         TelemetryEvent(
             run_id=state.run_id,
             scenario_id=state.scenario_id,
@@ -143,7 +194,7 @@ def main() -> int:
             boundary_events += 1
 
             emit(
-                out_path,
+                writer,
                 TelemetryEvent(
                     run_id=state.run_id,
                     scenario_id=state.scenario_id,
@@ -160,7 +211,7 @@ def main() -> int:
         if step % args.emit_every == 0:
             step_events += 1
             emit(
-                out_path,
+                writer,
                 TelemetryEvent(
                     run_id=state.run_id,
                     scenario_id=state.scenario_id,
@@ -178,7 +229,7 @@ def main() -> int:
     # METRIC summary
     duration_s = time.time() - t0
     emit(
-        out_path,
+        writer,
         TelemetryEvent(
             run_id=state.run_id,
             scenario_id=state.scenario_id,
@@ -200,7 +251,7 @@ def main() -> int:
 
     # RUN_END
     emit(
-        out_path,
+        writer,
         TelemetryEvent(
             run_id=state.run_id,
             scenario_id=state.scenario_id,

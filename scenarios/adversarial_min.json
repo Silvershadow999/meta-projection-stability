@@ -9,5 +9,18 @@
   "tags": {
     "tier": "p0",
     "kind": "adversarial"
-  }
+  },
+  "expected_boundaries": {
+    "min_count": 1,
+    "max_count": 10,
+    "allowed_names": [
+      "REVIEW"
+    ]
+  },
+  "expected_metrics_keys": [
+    "duration_s",
+    "n_steps",
+    "step_events",
+    "boundary_events"
+  ]
 }

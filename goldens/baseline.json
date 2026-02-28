@@ -1,0 +1,28 @@
+{
+  "schema_version": "golden_summary_v1",
+  "scenario_id": "baseline",
+  "expected": {
+    "boundaries": {
+      "min_count": 0,
+      "max_count": 0,
+      "allowed_names": []
+    },
+    "metrics_required_keys": [
+      "duration_s",
+      "n_steps",
+      "step_events",
+      "boundary_events"
+    ],
+    "metrics_baseline": {
+      "duration_s": 0.0011606216430664062,
+      "n_steps": 5.0,
+      "step_events": 3.0,
+      "boundary_events": 0.0
+    }
+  },
+  "budgets": {
+    "metrics_delta": {
+      "duration_s": 0.5
+    }
+  }
+}

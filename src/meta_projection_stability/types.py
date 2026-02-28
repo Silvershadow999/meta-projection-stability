@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field, asdict
 from enum import Enum
-from typing import Any, Dict, Mapping, Optional
+from typing import Any, Dict, Mapping, Optional, List
 import platform
 import sys
 import time
@@ -82,6 +82,9 @@ class ScenarioManifest:
     seed: int = 42
     config_overrides: Dict[str, Any] = field(default_factory=dict)
     tags: Dict[str, str] = field(default_factory=dict)
+
+    expected_boundaries: Dict[str, Any] = field(default_factory=dict)
+    expected_metrics_keys: List[str] = field(default_factory=list)
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)

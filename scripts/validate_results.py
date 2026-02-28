@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import hashlib
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
@@ -31,6 +32,68 @@ class RunCounters:
 def fail(msg: str) -> None:
     raise SystemExit(f"FAIL: {msg}")
 
+def _canonical_json(obj: dict) -> str:
+    # stable, hashable canonical JSON
+    return json.dumps(obj, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+
+
+def verify_hash_chain(jsonl_path: Path) -> None:
+    """
+    Verify tamper-evident hash chain if present.
+
+    Rules:
+    - If any line contains line_hash/prev_hash, then ALL non-empty lines must contain line_hash.
+    - prev_hash must equal previous line_hash (first line may have prev_hash null).
+    - line_hash must equal sha256(canonical_json_without_line_hash), where payload includes prev_hash.
+    """
+    last_hash = None
+    saw_hash_fields = False
+    missing_hash_lines = 0
+    total_lines = 0
+
+    with jsonl_path.open("r", encoding="utf-8") as f:
+        for i, line in enumerate(f, start=1):
+            line = line.strip()
+            if not line:
+                continue
+            total_lines += 1
+            obj = json.loads(line)
+
+            has_line_hash = "line_hash" in obj
+            has_prev_hash = "prev_hash" in obj
+            if has_line_hash or has_prev_hash:
+                saw_hash_fields = True
+
+            if saw_hash_fields and not has_line_hash:
+                missing_hash_lines += 1
+                continue
+
+            if not has_line_hash:
+                # hash chain not in use for this file
+                continue
+
+            # prev_hash check
+            prev = obj.get("prev_hash")
+            if last_hash is None:
+                # first hashed line: prev may be None/null; if not None, still accept but must be string
+                if prev is not None and not isinstance(prev, str):
+                    fail(f"hash-chain: line {i}: prev_hash must be string or null")
+            else:
+                if prev != last_hash:
+                    fail(f"hash-chain: line {i}: prev_hash mismatch (got={prev}, expected={last_hash})")
+
+            # recompute line hash
+            to_hash = dict(obj)
+            claimed = to_hash.pop("line_hash", None)
+            canon = _canonical_json(to_hash).encode("utf-8")
+            digest = hashlib.sha256(canon).hexdigest()
+            if claimed != digest:
+                fail(f"hash-chain: line {i}: line_hash mismatch (got={claimed}, computed={digest})")
+
+            last_hash = claimed
+
+    if saw_hash_fields and missing_hash_lines > 0:
+        fail(f"hash-chain: {missing_hash_lines} lines missing line_hash while chain is present")
 
 def main() -> int:
     ap = argparse.ArgumentParser()
@@ -42,6 +105,9 @@ def main() -> int:
     inp = Path(args.inp)
     if not inp.exists():
         fail(f"Input not found: {inp}")
+
+    # Tamper-evident chain validation (only enforced if hash fields present)
+    verify_hash_chain(inp)
 
     rows: List[Dict[str, Any]] = []
     with inp.open("r", encoding="utf-8") as f:
