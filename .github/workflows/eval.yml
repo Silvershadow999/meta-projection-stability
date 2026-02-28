@@ -30,7 +30,7 @@ jobs:
           chmod +x scripts/run_eval_clean.sh
           ./scripts/run_eval_clean.sh
 
-      - name: Generate SBOM
+      - name: Generate SBOM (non-blocking)
         if: always()
         run: |
           mkdir -p artifacts
