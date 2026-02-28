@@ -26,4 +26,4 @@ jobs:
 
       - name: Verify Level-0 hash / fingerprint
         run: |
-          pytest -q tests/level0/test_level0_fingerprint.py
+pytest -q tests/level0/test_level0_fingerprint.py --override-ini addopts=""
