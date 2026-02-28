@@ -23,6 +23,28 @@ class MetaProjectionStabilityAdapter:
     """
 
     def __init__(self, cfg: Optional[MetaProjectionStabilityConfig] = None):
+
+    @staticmethod
+    def _finite(x: float, default: float = 0.0) -> float:
+        \"\"\"Return finite float; fallback to default on NaN/Inf.\"\"\"
+        try:
+            xf = float(x)
+        except Exception:
+            xf = float(default)
+        if not np.isfinite(xf):
+            xf = float(default)
+        return float(xf)
+
+    @staticmethod
+    def _slew_limit(prev: float, new: float, max_delta: float) -> float:
+        \"\"\"Limit change per step to ±max_delta (rate limiting).\"\"\"
+        md = float(max_delta)
+        if md <= 0.0:
+            return float(new)
+        lo = float(prev) - md
+        hi = float(prev) + md
+        return float(np.clip(float(new), lo, hi))
+
         self.cfg = cfg or MetaProjectionStabilityConfig()
 
         self.human_significance: float = float(getattr(self.cfg, "human_significance_init", 1.0))
@@ -170,6 +192,12 @@ else:
 
         # φ-Quasi-PID layer (after trust damping)
         self.instability_risk = self._apply_quasi_phi_pid(self.instability_risk, delta_S)
+        # Step 19: rate-limit instability_risk to avoid step-to-step flips
+        _md = float(getattr(self.cfg, 'max_risk_slew_per_step', 0.25))
+        _prev = float(getattr(self, '_prev_instability_risk', self.instability_risk))
+        self.instability_risk = self._slew_limit(_prev, self.instability_risk, _md)
+        self._prev_instability_risk = float(self.instability_risk)
+
 
 
         # φ-Quasi-PID layer (after trust damping)
