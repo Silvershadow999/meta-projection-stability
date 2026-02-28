@@ -30,11 +30,12 @@ jobs:
           chmod +x scripts/run_eval_clean.sh
           ./scripts/run_eval_clean.sh
 
-      - name: Generate SBOM (non-blocking)
-        if: always()
+      - name: Generate SBOM
         run: |
           mkdir -p artifacts
+          python -m pip install --upgrade cyclonedx-py
           cyclonedx-py environment -o artifacts/sbom.json
+
 
       - name: Upload evaluation artifacts
         if: always()
