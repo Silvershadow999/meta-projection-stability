@@ -26,10 +26,16 @@ def _parse_severity(value: Any) -> Severity:
     Tolerant parsing:
     - accepts Severity enum
     - accepts strings like "warning"
+    - accepts dicts like {"value": "warning"} (defensive)
     - falls back to WARNING
     """
     if isinstance(value, Severity):
         return value
+
+    # Defensive: sometimes severity may be embedded in a dict-like payload
+    if isinstance(value, dict):
+        value = value.get("value") or value.get("severity") or value.get("name")
+
     if isinstance(value, str):
         v = value.strip().lower()
         for s in Severity:
