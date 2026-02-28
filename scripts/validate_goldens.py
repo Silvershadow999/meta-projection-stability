@@ -29,6 +29,7 @@ class GoldenSpec:
     allowed_names: List[str]
     metrics_required_keys: List[str]
     budgets_metrics_delta: Dict[str, float]
+    metrics_baseline: Dict[str, float]
 
 
 def load_json(path: Path) -> Dict[str, Any]:
@@ -51,6 +52,15 @@ def load_golden(path: Path) -> GoldenSpec:
     budgets = g.get("budgets") or {}
     md = budgets.get("metrics_delta") or {}
 
+    mb = exp.get("metrics_baseline") or {}
+    metrics_baseline = {}
+    if isinstance(mb, dict):
+        for k, v in mb.items():
+            try:
+                metrics_baseline[str(k)] = float(v)
+            except Exception:
+                pass
+
     return GoldenSpec(
         scenario_id=scenario_id,
         boundaries_min=int(b.get("min_count", 0)),
@@ -58,6 +68,7 @@ def load_golden(path: Path) -> GoldenSpec:
         allowed_names=list(b.get("allowed_names") or []),
         metrics_required_keys=metrics_required_keys,
         budgets_metrics_delta={str(k): float(v) for k, v in md.items()},
+        metrics_baseline=metrics_baseline,
     )
 
 
@@ -130,9 +141,20 @@ def main() -> int:
         if missing_keys:
             errors.append(f"{sid}: missing metric keys {missing_keys}")
 
-        # Budgets: delta vs expected baseline numeric
-        # Golden stores budgets only; expected numeric baselines will be added in A4.
-        # For now we only enforce presence of keys and boundary rules.
+        # Budgets: abs(current - baseline) <= budget for keys that have a budget.
+        # If a baseline value is missing, we skip that key (until goldens are populated).
+        for k, budget in spec.budgets_metrics_delta.items():
+            if k not in cur_metrics:
+                continue
+            if k not in spec.metrics_baseline:
+                continue
+            try:
+                cur_v = float(cur_metrics[k])
+                base_v = float(spec.metrics_baseline[k])
+                if abs(cur_v - base_v) > float(budget):
+                    errors.append(f"{sid}: metric {k} delta={abs(cur_v-base_v):.6g} > budget {budget} (cur={cur_v}, base={base_v})")
+            except Exception:
+                continue
 
     if errors:
         for e in errors:

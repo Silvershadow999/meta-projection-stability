@@ -14,7 +14,13 @@
       "n_steps",
       "step_events",
       "boundary_events"
-    ]
+    ],
+    "metrics_baseline": {
+      "duration_s": 0.002012491226196289,
+      "n_steps": 5.0,
+      "step_events": 3.0,
+      "boundary_events": 1.0
+    }
   },
   "budgets": {
     "metrics_delta": {
