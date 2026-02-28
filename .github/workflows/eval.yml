@@ -6,7 +6,7 @@ on:
   pull_request:
 
 jobs:
-  eval:
+  eval-gate:
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
