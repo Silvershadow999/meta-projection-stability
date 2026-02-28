@@ -46,4 +46,3 @@ jobs:
             artifacts/eval_report.md
             artifacts/summary.json
             artifacts/sbom.json
-python -m pip install cyclonedx-py
