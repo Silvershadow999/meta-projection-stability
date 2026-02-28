@@ -16,6 +16,18 @@ from .types import ScenarioManifest
 
 SCENARIOS_DIR_DEFAULT = Path("scenarios")
 
+def _as_dict(x, default):
+    return x if isinstance(x, dict) else default
+
+def _as_list_str(x, default):
+    if not isinstance(x, list):
+        return default
+    out = []
+    for v in x:
+        if isinstance(v, str) and v.strip():
+            out.append(v.strip())
+    return out
+
 
 class ScenarioManifestError(ValueError):
     pass
