@@ -179,7 +179,7 @@ Important:
 
 The question is intentionally narrow:
 
-> Can an external decision process remain coherent, bounded, reversibility-aware, and non-dominating under contradiction?
+Can an external decision process remain coherent, bounded, reversibility-aware, and non-dominating under contradiction?
 
 If not, the system should degrade toward rejection rather than cooperation.
 
