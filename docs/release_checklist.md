@@ -24,4 +24,3 @@
 ## Post-release
 - [ ] Start new “Unreleased” section in `CHANGELOG.md`.
 - [ ] Optional: create a follow-up issue for next milestone items.
-
