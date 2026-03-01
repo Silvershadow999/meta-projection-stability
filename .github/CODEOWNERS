@@ -1,24 +1,21 @@
-# CODEOWNERS: protect safety-critical surfaces
-# Effective only if branch protection/ruleset requires CODEOWNER reviews.
+# Scoped ownership for safety / gate-critical surfaces
 
-# CI workflows / gates
-.github/workflows/ @Silvershadow999
+# CI / workflows
+/.github/ @Silvershadow999
 
-# Validators and pipeline scripts
-scripts/validate_*.py @Silvershadow999
-scripts/run_eval_clean.sh @Silvershadow999
-scripts/eval_runner.py @Silvershadow999
-scripts/run_robustness.py @Silvershadow999
+# Core library + control logic
+/src/meta_projection_stability/ @Silvershadow999
 
-# Golden baselines / regression anchors
-artifacts/robustness_golden.json @Silvershadow999
-goldens/ @Silvershadow999
+# Evaluation & robustness tooling
+/scripts/ @Silvershadow999
 
-# Scenario manifests (inputs to evaluation)
-scenarios/ @Silvershadow999
+# Scenario inputs + goldens (regression baselines)
+/scenarios/ @Silvershadow999
+/goldens/ @Silvershadow999
 
-# Safety docs (governance / claims)
-docs/threat_model.md @Silvershadow999
-docs/safety_case.md @Silvershadow999
-docs/non_goals.md @Silvershadow999
-docs/evaluation_protocol.md @Silvershadow999
+# Safety engineering docs (optional but recommended)
+/docs/threat_model.md @Silvershadow999
+/docs/safety_case.md @Silvershadow999
+/docs/non_goals.md @Silvershadow999
+/docs/evaluation_protocol.md @Silvershadow999
+/docs/telemetry_contract.md @Silvershadow999
