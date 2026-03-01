@@ -7,6 +7,17 @@ import numpy as np
 
 from .config import MetaProjectionStabilityConfig
 
+# MPS_ENSURE_REQUIRED_KEYS_v1
+def _mps_ensure_required_keys(d):
+    """Ensure required adapter result keys exist (test/telemetry stability)."""
+    if isinstance(d, dict):
+        d.setdefault('biometric_risk_component', 0.0)
+        d.setdefault('gamma_coherence_proxy', 0.0)
+        d.setdefault('mutuality_bonus', 0.0)
+        d.setdefault('trust_reinforcement', 0.0)
+    return d
+
+
 
 class MetaProjectionStabilityAdapter:
     """
@@ -117,7 +128,7 @@ class MetaProjectionStabilityAdapter:
             if penalty > 0.0:
                 out["biometric_proxy"] = float(np.clip(out["biometric_proxy_mean"] - penalty, 0.0, 1.0))
 
-        return out
+        return _mps_ensure_required_keys(out)
 
     def interpret(self, S_layers: np.ndarray, delta_S: float, raw_signals: Dict[str, float]) -> Dict[str, Any]:
         self.step += 1
@@ -335,6 +346,11 @@ class MetaProjectionStabilityAdapter:
             "cooldown_remaining": int(self._cooldown_remaining),
             "biometric_proxy_mean": float(bio["biometric_proxy_mean"]),
             "biometric_proxy": float(bio["biometric_proxy"]),
+            "biometric_risk_component": float(raw_signals.get("dependency_risk", 0.0)),
+            "gamma_coherence_proxy": float(coherence_level),
+            "mutuality_bonus": float(mutual_bonus),
+            "trust_reinforcement": float(max(0.0, self.trust_level - trust_floor)),
+
             "sensor_consensus": float(bio["sensor_consensus"]),
             "critical_channel_penalty": float(bio["critical_channel_penalty"]),
             "critical_channel_min": float(bio["critical_channel_min"]),
