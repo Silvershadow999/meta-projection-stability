@@ -1,13 +1,3 @@
-# Scoped ownership for safety / gate-critical surfaces
-
-/.github/ @DeinHandle
-/src/meta_projection_stability/ @DeinHandle
-/scripts/ @DeinHandle
-/scenarios/ @DeinHandle
-/goldens/ @DeinHandle
-
-/docs/threat_model.md @DeinHandle
-/docs/safety_case.md @DeinHandle
-/docs/non_goals.md @DeinHandle
-/docs/evaluation_protocol.md @DeinHandle
-/docs/telemetry_contract.md @DeinHandle
+# CODEOWNERS
+# Default owner for the entire repository:
+* @Silvershadow999
