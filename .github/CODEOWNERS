@@ -1,21 +1,13 @@
 # Scoped ownership for safety / gate-critical surfaces
 
-# CI / workflows
-/.github/ @Silvershadow999
+/.github/ @DeinHandle
+/src/meta_projection_stability/ @DeinHandle
+/scripts/ @DeinHandle
+/scenarios/ @DeinHandle
+/goldens/ @DeinHandle
 
-# Core library + control logic
-/src/meta_projection_stability/ @Silvershadow999
-
-# Evaluation & robustness tooling
-/scripts/ @Silvershadow999
-
-# Scenario inputs + goldens (regression baselines)
-/scenarios/ @Silvershadow999
-/goldens/ @Silvershadow999
-
-# Safety engineering docs (optional but recommended)
-/docs/threat_model.md @Silvershadow999
-/docs/safety_case.md @Silvershadow999
-/docs/non_goals.md @Silvershadow999
-/docs/evaluation_protocol.md @Silvershadow999
-/docs/telemetry_contract.md @Silvershadow999
+/docs/threat_model.md @DeinHandle
+/docs/safety_case.md @DeinHandle
+/docs/non_goals.md @DeinHandle
+/docs/evaluation_protocol.md @DeinHandle
+/docs/telemetry_contract.md @DeinHandle
