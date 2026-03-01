@@ -51,3 +51,9 @@ __all__ = [
     "run_adversarial_scenario",
     "run_all_scenarios",
 ]
+# --- version surface ---
+try:
+    from importlib.metadata import version as _pkg_version  # py3.8+
+    __version__ = _pkg_version("meta-projection-stability")
+except Exception:
+    __version__ = "0.0.0"
