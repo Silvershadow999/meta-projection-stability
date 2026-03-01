@@ -1,18 +1,37 @@
 # meta-projection-stability
 
-A compact research / engineering framework for **meta-stability simulation**, **trust-damped control**, **human-significance anchoring**, **biometric proxy evaluation**, **adversarial scenario testing**, and experimental **axiom-bound compatibility logic**.
+Experimental control-logic prototype for **meta-projection stability** with **human-significance anchoring**, **trust-modulated risk regulation**, **structured telemetry**, **scenario comparison**, and **CI-gated robustness/regression checks**.
 
-The repository is designed as a **simulation and evaluation environment** for studying how a bounded control system behaves under instability, contradiction, degraded trust, spoof-like signals, weak channel integrity, and hard safety boundary conditions — while preserving explicitly human-centered constraints.
-
----
+This repository is designed as a **simulation + evaluation environment** for studying how a bounded control system behaves under instability, contradiction, degraded trust, spoof-like signals, weak channel integrity, and hard safety boundary conditions — while preserving explicitly human-centered constraints.
 
 ## Philosophy in One Sentence
-
 Adaptive under uncertainty, bounded under contradiction, defensive under instability, and locked under irreversible violation.
 
 ---
 
-## Core Idea
+## What this repo is (and is not)
+
+**This repo is:**
+- A research/engineering sandbox to test **bounded decision logic** under stress
+- A safety-engineering candidate focusing on:
+  - structured telemetry
+  - explicit safety boundaries
+  - reproducibility + provenance
+  - scenario comparison
+  - robustness under benign perturbations
+  - regression protection (goldens)
+
+**This repo is not:**
+- A production deployment safety guarantee
+- A full adversarial security product
+- A privacy/compliance framework
+- A formal verification system
+
+See: `docs/non_goals.md`
+
+---
+
+## Core idea
 
 The framework combines several interacting layers:
 
@@ -22,7 +41,7 @@ The framework combines several interacting layers:
 - risk smoothing / damping
 - biometric proxy telemetry
 - mutuality / support shaping
-- adversarial scenario simulation
+- adversarial scenario testing
 - axiom-lock / irreversible boundary logic
 - level-0 policy / fingerprint protection
 
@@ -34,34 +53,26 @@ The goal is to explore systems that remain:
 - resistant to shallow spoofing
 - resistant to domination-style collapse
 - measurable through explicit telemetry
-- inspectable through adversarial testing
+- inspectable through scenario-driven stress tests
 
 ---
 
-## Project Status
+## Repository structure (high level)
 
-This project is an **experimental prototype**.
-
-It is **not** presented as a production-ready alignment architecture, a deployment-grade security product, or a proof of safe autonomous control.
-
-It is best understood as a **research and engineering sandbox** for exploring:
-
-- human-centered control logic
-- trust-aware damping
-- biometric / channel penalties
-- emergency lock behavior
-- foundational policy invariants
-- compatibility checks under contradiction
-- adversarial stress evaluation
+- `src/meta_projection_stability/` — library code (adapter, simulation, telemetry schema, etc.)
+- `scenarios/` — scenario manifests (`baseline.json`, `adversarial_min.json`, …)
+- `scripts/` — runners + validators (eval, robustness, reports)
+- `artifacts/` — generated outputs (JSONL telemetry, reports, robustness artifacts)
+- `tests/` — smoke + invariants tests (including robustness artifact checks)
+- `docs/` — safety engineering docs (threat model, safety case, protocol, non-goals)
+- `.github/workflows/` — CI gates
 
 ---
 
-## Main Components
+## Main components
 
 ### 1) MetaProjectionStabilityAdapter
-
-The `MetaProjectionStabilityAdapter` models:
-
+Models:
 - instability risk
 - trust-level evolution
 - momentum-sensitive warning logic
@@ -72,8 +83,7 @@ The `MetaProjectionStabilityAdapter` models:
 - mutuality bonus signals
 - axiom-lock conditions
 
-Typical output fields include:
-
+Outputs are designed to be **inspectable** and **telemetry-friendly**:
 - decision / status / reasons
 - human_significance + EMA
 - risk + damped risk
@@ -83,84 +93,42 @@ Typical output fields include:
 - biometric proxy signals (mean, consensus, critical-channel penalty)
 - axiom lock indicators
 
-### 2) Simulation Layer
-
-`run_simulation(...)` provides a configurable synthetic environment with:
-
-- multiple layer magnitudes
-- synthetic instability windows
-- trend-sensitive updates
+### 2) Simulation layer
+Synthetic environment for rapid testing without external systems:
+- multi-layer magnitudes
+- stress windows / drift patterns
 - history tracking for risk / trust / significance
 - optional plotting and summaries
 
-This allows rapid testing of control behavior without requiring external systems.
-
-### 3) Biometric Proxy / Signal Integrity Layer
-
-The adapter can incorporate soft biometric / neuro-behavioral proxy logic, including:
-
+### 3) Biometric proxy / signal integrity layer
+Optional “soft” multi-signal robustness:
 - consensus quality
 - channel degradation
 - critical-channel penalties
 - autonomy-sensitive damping
-- support / mutuality signals
+- mutuality/support signals
 
 Telemetry separates:
-
 - biometric_proxy_mean
 - biometric_proxy
 - sensor_consensus
 - critical_channel_min
 - critical_channel_penalty
 
-This helps distinguish:
+### 4) Scenario comparison + adversarial testing
+The scenario suite supports:
+- baseline reference
+- adversarial minimal cases (boundary/telemetry robustness)
+- structured comparison via reproducible artifacts
 
-- stable agreement
-- brittle agreement masked by averaging
-- suspicious override behavior
-- shallow consensus masking a weak channel
-
-### 4) Adversarial Scenario Runner
-
-The adversarial tooling supports scenario-style stress tests such as:
-
-- spoof-like instability
-- contradiction pressure
-- trust degradation
-- low-coherence or low-consensus trajectories
-- threshold-hover behavior
-- hard axiom triggers
-- early lock conditions
-
-The aim is not frontier-scale red-team realism, but a structured way to test how the control loop responds under pressure.
-
-### 5) Level-0 Axiom Protection
-
-The repository includes a **Level-0 Axiom** concept together with fingerprint checks to protect canonical safety text / invariants from silent drift.
-
-This acts as a lightweight integrity boundary for foundational policy material.
-
-### 6) Experimental Axiom Handshake / Compatibility Logic
-
-The repository includes experimental axiom-bound compatibility modules intended to evaluate whether an external entity / process behaves in a way that remains compatible with bounded, human-preserving control logic.
-
-Important:
-- this is a compatibility evaluation concept
-- it is not an overwrite mechanism
-- it is not an offensive control interface
-- it is a bounded integrity / compatibility idea
-
-The question is intentionally narrow:
-
-Can an external decision process remain coherent, bounded, reversibility-aware, and non-dominating under contradiction?
-
-If not, the system should degrade toward rejection rather than cooperation.
+### 5) Level-0 axiom protection
+Level-0 invariants are guarded against silent drift by a CI integrity gate (“axiom guard”).
 
 ---
 
 ## Installation
 
-Editable install:
+Editable install (recommended for development):
 
 ```bash
 pip install -e .
