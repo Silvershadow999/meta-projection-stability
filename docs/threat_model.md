@@ -1,128 +1,91 @@
-# Threat Model — meta-projection-stability (Phase 6)
+# Threat Model (v1)
 
-Status: **Draft (Phase 6 / Step 15)**  
-Scope: **Evaluation harness + telemetry + boundary signalling**, not production deployment.
+## Scope
+This threat model covers the **evaluation and safety-engineering pipeline** of `meta-projection-stability`:
+- structured telemetry + artifacts (`results.jsonl`, `eval_report.md`, `robustness_report.json`)
+- scenario manifests and reproducible runs (baseline + adversarial variants)
+- CI gates (axiom integrity, eval validation, robustness validation)
 
-## 1) Purpose and Scope
+**Out of scope (for now):**
+- deployment as a real-time controller in production environments
+- hardware security (TPM/secure enclaves), network perimeter security, physical threats
+- model weights / training pipelines (not part of this repo)
 
-This document models credible threats against **evaluation integrity** and **safety boundary enforcement** for the `meta-projection-stability` repository.
+## Assets (what we protect)
+1. **Safety invariants / Level-0 axiom** (integrity, non-silent drift)
+2. **Telemetry contract** (schema stability, unambiguous semantics)
+3. **Reproducibility / provenance** (seed, manifest, git commit, deterministic artifacts)
+4. **Evaluation artifacts** (append-only results, reports, golden references)
+5. **Robustness contract** (expectations + validator + golden drift checks)
 
-In-scope components (current repo structure):
-- **Telemetry Contract** (`src/meta_projection_stability/types.py`)
-- **Run State snapshotting** (`src/meta_projection_stability/state.py`)
-- **Scenario manifests** (`scenarios/*.json` or equivalent)
-- **Eval runner** (`scripts/eval_runner.py`, `scripts/run_eval_clean.sh`)
-- **Results + validator + report** (`artifacts/results.jsonl`, `scripts/validate_results.py`, `artifacts/eval_report.md`)
-- **CI eval gate** (`.github/workflows/eval.yml`)
+## Trust boundaries
+- Developer workstation / Codespace vs. GitHub Actions runners
+- Local artifacts (mutable) vs. CI artifacts (immutable per run)
+- Scenario inputs (manifests) vs. produced outputs (JSONL/JSON reports)
+- Human review boundary: when automation must escalate (REVIEW / REFUSE / EMERGENCY_STOP)
 
-Out-of-scope (for now):
-- Full production deployment / external API service hardening
-- Cryptographic signing / HSM key management (tracked as future work)
-- Formal verification (TLA+/Coq) beyond lightweight invariants (tracked as future work)
+## Assumptions
+- CI runners are ephemeral and start from clean checkouts.
+- Branch protection rules enforce required checks before merge.
+- Scenarios are treated as untrusted input (must be validated).
+- Artifacts are not assumed to be confidential (public repo setting).
 
-Security goals:
-- **G1: Reproducibility** — same scenario + code + seed ⇒ comparable outputs
-- **G2: Provenance** — every run is attributable (commit, scenario id, tool version)
-- **G3: Boundary credibility** — explicit boundary events cannot be silently suppressed
-- **G4: Evaluation integrity** — results cannot be trivially forged without detection
-- **G5: Safe failure** — malformed inputs degrade safely (REVIEW / EMERGENCY_STOP)
+## Threat categories (STRIDE-inspired)
 
-Non-goals (summary; detailed in `docs/non_goals.md` later):
-- Preventing a determined attacker with full repo write access
-- Defending against kernel/host compromise
-- Guaranteeing correctness of the underlying scientific model (this is evaluation infra)
+### 1) Spoofing
+**Threat:** A malicious contributor spoofs scenario identity or provenance (e.g., claiming baseline while running altered parameters).  
+**Mitigations:**
+- run provenance captured in telemetry (git commit, dirty flag)
+- scenario_id must match manifest id; loader enforces stable mapping
+- CI gates run from clean checkout (no dirty workspace)
+**Residual risk:** provenance can be incomplete if git metadata unavailable; mitigate by failing closed in CI.
 
-## 2) Assets
+### 2) Tampering
+**Threat:** Modifying artifacts or manifests to hide regressions (e.g., editing robustness_report.json, changing goldens silently).  
+**Mitigations:**
+- CI regenerates artifacts and validates invariants
+- golden drift check compares current report against committed golden with tolerances
+- axiom / fingerprint guard prevents silent drift of foundational safety text
+**Residual risk:** A PR can still change golden files; mitigation is explicit human review + PR description requiring justification.
 
-Primary assets we protect:
-- **A1: Telemetry stream correctness** (event types, ordering, required fields)
-- **A2: Boundary signals** (e.g., REFUSE/REVIEW/EMERGENCY_STOP) and their triggers
-- **A3: Scenario definitions** (inputs/parameters that define comparisons)
-- **A4: Results** (`results.jsonl`) + **validator acceptance criteria**
-- **A5: Provenance metadata** (git commit, dirty flag, environment fingerprint)
-- **A6: CI gate outcome** (pass/fail as a policy enforcement mechanism)
+### 3) Repudiation
+**Threat:** Contributor denies responsibility for changed behavior ("it was always like that").  
+**Mitigations:**
+- append-only JSONL and deterministic reports
+- explicit scenario manifests + seeds
+- CI logs and artifacts attached to runs
+**Residual risk:** none beyond normal git history ambiguity.
 
-## 3) Trust Boundaries and Data Flows
+### 4) Information disclosure
+**Threat:** leaking sensitive info into artifacts (paths, local usernames, private metadata).  
+**Mitigations:**
+- keep provenance minimal; avoid storing secrets in payloads
+- do not log environment variables or file contents outside repo
+**Residual risk:** developer may add sensitive fields; mitigate by code review and linting.
 
-### Trust boundary TB1 — Scenario input boundary
-Untrusted:
-- scenario manifest files (could be malformed / adversarial)
-Trusted:
-- schema validation + defaulting + explicit allowlist of scenario keys
+### 5) Denial of service (DoS) / resource exhaustion
+**Threat:** scenarios or perturbations cause CI to time out (infinite loops, huge artifacts).  
+**Mitigations:**
+- workflow timeouts
+- bounded steps, bounded perturbations count
+- artifact size discipline (summary + golden, not raw dumps)
+**Residual risk:** intentionally expensive PRs; mitigate by limiting CI minutes and adding per-run caps.
 
-### Trust boundary TB2 — Runtime signal boundary (adapter/runner)
-Untrusted:
-- raw signals passed into adapter/interpret layer (NaN/Inf/out-of-range, weird types)
-Trusted:
-- sanitization + clipping + explicit “invalid → boundary event” behavior
+### 6) Elevation of privilege / policy bypass
+**Threat:** bypassing safety gates (disabling validators, removing required checks).  
+**Mitigations:**
+- branch protection rulesets enforce required checks
+- separate gates (axiom-guard, eval-gate, robustness-gate) reduce single-point failure
+**Residual risk:** repository admin privileges can override; mitigated by governance, not code.
 
-### Trust boundary TB3 — Results boundary (filesystem / artifacts)
-Untrusted:
-- artifacts directory contents
-Trusted:
-- validator rules + deterministic formatting + CI re-generation of “fresh” results
+## Threat-driven tests (mapping to repo checks)
+- **axiom-guard:** integrity boundary for Level-0 axiom / core invariants
+- **eval-gate:** results.jsonl invariants + report generation
+- **robustness-gate:** benign perturbations stability + expectations validator + golden drift check
 
-### Trust boundary TB4 — CI boundary
-Untrusted:
-- PR author environment
-Trusted:
-- GitHub Actions runner environment, pinned workflow, reproducible install
-
-Data flow summary:
-scenario manifest → eval_runner → adapter/state → telemetry events → results.jsonl → validate_results → eval_report → CI gate
-
-## 4) Threats (STRIDE)
-
-Legend:
-- Impact: Low / Med / High
-- Likelihood: Low / Med / High
-- Detection: how we expect to catch it today
-
-| ID | STRIDE | Threat | Asset(s) | Impact | Likelihood | Current controls | Gaps / Planned mitigations |
-|---:|:------:|--------|----------|:------:|:----------:|------------------|----------------------------|
-| T01 | S | Scenario spoofing (claim baseline but run different params) | A3,A4,A5 | High | Med | scenario_id in results; validator requires scenarios | Add scenario hash + manifest canonicalization |
-| T02 | T | Results tampering (edit `results.jsonl`) | A4,A6 | High | Med | CI regenerates fresh results; validator checks structure | Add append-only signed log (future) |
-| T03 | R | Repudiation of runs (“not my run”) | A5 | Med | Med | git commit + dirty flag | Add environment fingerprint + tool version pin |
-| T04 | I | Leak of sensitive local paths / env | A5 | Low | Med | keep metadata minimal | Redact absolute paths; avoid dumping env vars |
-| T05 | D | DoS via huge scenario / runaway loop | A1,A6 | Med | Med | n_steps bounded; timeouts in CI | Add explicit per-scenario max runtime + hard timeout |
-| T06 | E | Privilege escalation via command injection in runner | A6 | High | Low | avoid shell eval; fixed scripts | Audit runner; never interpolate untrusted strings |
-| T07 | T | Boundary suppression (emit no boundary event) | A2,A6 | High | Med | validator can require boundary events in adversarial scenario | Tighten validator invariants: required event ordering |
-| T08 | T | Telemetry schema drift (silent breaking change) | A1,A6 | High | Med | typed contract; import smoke tests | Add versioned schema + regression snapshots |
-| T09 | D | NaN/Inf poisoning in interpret() | A2,A4 | High | Med | partial clipping | Add input sanitation: finite checks → boundary event |
-| T10 | S/T | Scenario manifest trick: path traversal / unintended file read | A3,A6 | High | Low | manifests should be data-only | Ensure manifests cannot reference filesystem paths |
-
-## 5) Top Risks (Prioritized)
-
-1) **Evaluation integrity bypass** (T01/T02/T07/T08)  
-   Why: undermines the entire “safety engineering candidate” claim.
-2) **NaN/Inf poisoning** (T09)  
-   Why: causes undefined behavior and false safety confidence.
-3) **DoS via adversarial scenario** (T05)  
-   Why: blocks CI gate and slows iteration.
-
-## 6) Mitigations Roadmap (mapped to Phases)
-
-Immediate (Phase 5/6 adjacent):
-- Enforce **scenario manifest schema** + canonical JSON and hash in results (T01)
-- Strengthen validator: enforce **required event counts + ordering** (T07/T08)
-- Add **finite checks** (NaN/Inf) in adapter interpret layer → boundary event (T09)
-
-Next (Phase 6+):
-- Add append-only **signed audit log** (T02/T03)
-- Add dependency pinning + SBOM + Dependabot (supply-chain)
-- Formalize invariants (TLA+) for “axiom lock” / boundary state machine
-
-## 7) Evidence Hooks (What we can show auditors)
-
-- Telemetry contract types: `src/meta_projection_stability/types.py`
-- Run snapshot: `src/meta_projection_stability/state.py`
-- Deterministic run metadata in results: commit, dirty, scenario_id
-- Validator acceptance criteria: `scripts/validate_results.py`
-- CI enforcement: `.github/workflows/eval.yml`
-
-## 8) Assumptions
-
-- Adversary can modify scenario manifests in PRs, but cannot bypass CI checks once required.
-- CI runner environment is trusted (no host compromise).
-- Threat model focuses on **integrity/credibility** of evaluation, not on production security.
+## Open risks / next iterations
+- Formalize "Non-goals" to prevent misuse interpretations.
+- Add explicit "Safety Case" argument structure (claims → evidence → tests).
+- Add scenario input validation (schema validation, bounds checking).
+- Add adversarial "tamper" scenarios to test reporting integrity.
 
