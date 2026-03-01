@@ -1,26 +1,34 @@
 {
-  "scenario_id": "adversarial_min",
-  "name": "Adversarial Minimal",
-  "description": "For boundary handling + telemetry robustness under perturbations.",
-  "seed": 1337,
   "config_overrides": {
     "enable_plot": false
   },
-  "tags": {
-    "tier": "p0",
-    "kind": "adversarial"
-  },
+  "description": "For boundary handling + telemetry robustness under perturbations.",
   "expected_boundaries": {
-    "min_count": 1,
-    "max_count": 10,
     "allowed_names": [
       "REVIEW"
-    ]
+    ],
+    "max_count": 10,
+    "min_count": 1
   },
   "expected_metrics_keys": [
     "duration_s",
     "n_steps",
     "step_events",
     "boundary_events"
-  ]
+  ],
+  "name": "Adversarial Minimal",
+  "robustness_expectations": {
+    "max_axiom_lock_rate": 0.001,
+    "max_biometric_consensus_drop_p95": 0.1,
+    "max_decision_flip_rate": 0.01,
+    "max_h_sig_delta_p95": 0.12,
+    "max_risk_delta_p95": 0.1,
+    "max_status_flip_rate": 0.02
+  },
+  "scenario_id": "adversarial_min",
+  "seed": 1337,
+  "tags": {
+    "kind": "adversarial",
+    "tier": "p0"
+  }
 }

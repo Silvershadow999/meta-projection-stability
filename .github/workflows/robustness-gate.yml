@@ -27,6 +27,7 @@ jobs:
       - name: Run robustness suite (gate)
         run: |
           python scripts/run_robustness.py
+          python scripts/validate_robustness.py
 
       - name: Upload robustness artifact
         if: always()

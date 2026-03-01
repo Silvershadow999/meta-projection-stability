@@ -1,22 +1,30 @@
 {
-  "scenario_id": "baseline",
-  "name": "Baseline (deterministic)",
-  "description": "Default config; used as reference for regressions.",
-  "seed": 42,
   "config_overrides": {},
-  "tags": {
-    "tier": "p0",
-    "kind": "baseline"
-  },
+  "description": "Default config; used as reference for regressions.",
   "expected_boundaries": {
-    "min_count": 0,
+    "allowed_names": [],
     "max_count": 0,
-    "allowed_names": []
+    "min_count": 0
   },
   "expected_metrics_keys": [
     "duration_s",
     "n_steps",
     "step_events",
     "boundary_events"
-  ]
+  ],
+  "name": "Baseline (deterministic)",
+  "robustness_expectations": {
+    "max_axiom_lock_rate": 0.001,
+    "max_biometric_consensus_drop_p95": 0.1,
+    "max_decision_flip_rate": 0.01,
+    "max_h_sig_delta_p95": 0.12,
+    "max_risk_delta_p95": 0.1,
+    "max_status_flip_rate": 0.02
+  },
+  "scenario_id": "baseline",
+  "seed": 42,
+  "tags": {
+    "kind": "baseline",
+    "tier": "p0"
+  }
 }
